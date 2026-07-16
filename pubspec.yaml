@@ -1,0 +1,33 @@
+name: dojo
+description: "KMI Internship Monitoring mobile application."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  connectivity_plus: ^7.3.0
+  device_info_plus: ^13.2.0
+  dio: ^5.10.0
+  flutter_local_notifications: ^22.0.1
+  flutter_secure_storage: ^10.3.1
+  flutter_timezone: ^5.1.0
+  geolocator: ^14.0.3
+  image_picker: ^1.2.3
+  intl: ^0.20.3
+  shared_preferences: ^2.5.5
+  timezone: ^0.11.1
+  vibration: ^3.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
