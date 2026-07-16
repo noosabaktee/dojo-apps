@@ -8,6 +8,7 @@ import '../../models/app_user.dart';
 import '../../repositories/app_repository.dart';
 import '../../services/local_notification_service.dart';
 import '../../state/app_session.dart';
+import '../../widgets/common.dart';
 import '../attendance/attendance_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../dashboard/dashboard_screen.dart';
@@ -16,7 +17,6 @@ import '../leaderboard/leaderboard_screen.dart';
 import '../menu/menu_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
-import '../reports/report_screen.dart';
 import '../wfh/wfh_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -41,6 +41,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
   Timer? _pollTimer;
   Set<int>? _knownNotificationIds;
+  late List<_Destination> _destinationItems;
+  late List<Widget> _pages;
 
   List<_Destination> get _destinations {
     if (widget.user.isIntern) {
@@ -148,8 +150,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _syncPages();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.notifications.setPayloadHandler(_openNotificationPayload);
       widget.notifications.requestPermission();
       _pollNotifications();
     });
@@ -160,7 +164,30 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.user.role != widget.user.role) {
+      _index = 0;
+      _syncPages();
+    }
+  }
+
+  void _syncPages() {
+    _destinationItems = _destinations;
+    _pages = _destinationItems
+        .map(
+          (destination) => KeyedSubtree(
+            key: ValueKey('${destination.key}-${widget.user.id}'),
+            child: _pageFor(destination.key),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
   void dispose() {
+    widget.notifications.setPayloadHandler(null);
     _pollTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -186,12 +213,40 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           id: asInt(item['id']),
           title: item['title']?.toString() ?? 'Update Dojo',
           body: item['message']?.toString() ?? '',
-          payload: item['link']?.toString(),
+          payload: item['link']?.toString() ?? item['type']?.toString() ?? '',
         );
       }
     } on ApiException {
       // Polling is opportunistic; feature screens still expose manual refresh.
     }
+  }
+
+  void _openNotificationPayload(String payload) {
+    if (!mounted) return;
+    _openLink(payload);
+  }
+
+  void _openLink(String rawLink) {
+    final value = rawLink.toLowerCase();
+    final path = Uri.tryParse(rawLink)?.path.toLowerCase() ?? value;
+    final key = switch ((path, value)) {
+      (final path, _) when path.contains('work-from-home') => 'wfh',
+      (final path, _) when path.contains('attendance') => 'attendance',
+      (final path, _) when path.contains('calendar') => 'calendar',
+      (final path, _) when path.contains('leaderboard') => 'leaderboard',
+      (final path, _)
+          when path.contains('analytics') ||
+              path.contains('evaluation') ||
+              path.contains('certificate') =>
+        'evaluation',
+      (final path, _) when path.contains('notification') => 'notifications',
+      (final path, _) when path.contains('profile') => 'profile',
+      (_, final value) when value == 'wfh' => 'wfh',
+      (_, final value) when value == 'certificate' => 'evaluation',
+      (_, final value) when value == 'attendance' => 'attendance',
+      _ => 'dashboard',
+    };
+    _openFeature(key);
   }
 
   void _openFeature(String key) {
@@ -203,7 +258,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (key == 'notifications') {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => NotificationsScreen(repository: widget.repository),
+          builder: (routeContext) => NotificationsScreen(
+            repository: widget.repository,
+            onOpenLink: (link) {
+              Navigator.of(routeContext).pop();
+              unawaited(_openLinkAfterRouteCloses(link));
+            },
+          ),
         ),
       );
       return;
@@ -224,10 +285,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (child == null) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            Scaffold(appBar: AppBar(toolbarHeight: 46), body: child),
+        builder: (_) => Scaffold(
+          appBar: AppBar(toolbarHeight: 46),
+          body: AppPageBackground(variant: 1, child: child),
+        ),
       ),
     );
+  }
+
+  Future<void> _openLinkAfterRouteCloses(String link) async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (mounted) _openLink(link);
   }
 
   Widget? _featureFor(String key) => switch (key) {
@@ -241,13 +309,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       user: widget.user,
       repository: widget.repository,
     ),
-    'wfh' => WfhScreen(repository: widget.repository),
-    'report' => ReportScreen(user: widget.user, repository: widget.repository),
+    'wfh' => WfhScreen(user: widget.user, repository: widget.repository),
     _ => null,
   };
 
-  Widget _selectedPage() {
-    final key = _destinations[_index].key;
+  Widget _pageFor(String key) {
     return switch (key) {
       'dashboard' => DashboardScreen(
         user: widget.user,
@@ -263,19 +329,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final destinations = _destinations;
+    final destinations = _destinationItems;
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: IndexedStack(
-          index: _index,
-          children: List.generate(destinations.length, (index) {
-            if (index != _index) return const SizedBox.shrink();
-            return KeyedSubtree(
-              key: ValueKey('${destinations[index].key}-${widget.user.id}'),
-              child: _selectedPage(),
-            );
-          }),
+      backgroundColor: Colors.transparent,
+      body: AppPageBackground(
+        variant: _index,
+        child: SafeArea(
+          bottom: false,
+          child: IndexedStack(index: _index, children: _pages),
         ),
       ),
       bottomNavigationBar: NavigationBar(

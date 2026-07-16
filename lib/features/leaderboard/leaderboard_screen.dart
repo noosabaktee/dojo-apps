@@ -53,6 +53,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             title: 'Leaderboard',
             subtitle: 'Apresiasi progress dan kontribusi intern.',
           ),
+          const SizedBox(height: 18),
+          const FeatureBanner(
+            badge: 'Peringkat performa',
+            title: 'Rayakan setiap progress terbaik',
+            subtitle:
+                'Poin mencerminkan konsistensi, kontribusi, dan perkembangan.',
+            icon: Icons.emoji_events_rounded,
+            supportingIcons: [
+              Icons.trending_up_rounded,
+              Icons.workspace_premium_outlined,
+            ],
+          ),
           const SizedBox(height: 22),
           if (items.isEmpty)
             const EmptyState(

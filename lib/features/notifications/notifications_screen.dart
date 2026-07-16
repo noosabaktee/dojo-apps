@@ -7,9 +7,14 @@ import '../../repositories/app_repository.dart';
 import '../../widgets/common.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({required this.repository, super.key});
+  const NotificationsScreen({
+    required this.repository,
+    required this.onOpenLink,
+    super.key,
+  });
 
   final AppRepository repository;
+  final ValueChanged<String> onOpenLink;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -50,6 +55,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  Future<void> _openItem(Map<String, dynamic> item) async {
+    await _read(item);
+    if (!mounted) return;
+    final link = item['link']?.toString();
+    widget.onOpenLink(
+      link?.isNotEmpty == true
+          ? link!
+          : item['type']?.toString() ?? 'dashboard',
+    );
+  }
+
   Future<void> _readAll() async {
     try {
       await widget.repository.markAllNotificationsRead();
@@ -76,7 +92,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _body(),
+      body: AppPageBackground(variant: 1, child: _body()),
     );
   }
 
@@ -84,25 +100,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (_items == null && _error == null) return const LoadingList();
     if (_items == null) return ErrorState(message: _error!, onRetry: _load);
     if (_items!.isEmpty) {
-      return const EmptyState(
-        title: 'Belum ada notifikasi',
-        message: 'Update kegiatan dan pengajuan akan muncul di sini.',
-        icon: Icons.notifications_none_rounded,
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
+        children: const [
+          _NotificationBanner(),
+          SizedBox(height: 18),
+          EmptyState(
+            title: 'Belum ada notifikasi',
+            message: 'Update kegiatan dan pengajuan akan muncul di sini.',
+            icon: Icons.notifications_none_rounded,
+          ),
+        ],
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
-        itemCount: _items!.length,
+        itemCount: _items!.length + 1,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final item = _items![index];
+          if (index == 0) return const _NotificationBanner();
+          final item = _items![index - 1];
           final unread = item['is_read'] != true;
           return Card(
             color: unread ? const Color(0xFFF1F8EF) : Colors.white,
             child: InkWell(
-              onTap: () => _read(item),
+              onTap: () => _openItem(item),
               borderRadius: BorderRadius.circular(22),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -176,4 +200,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     'internship' => Icons.school_outlined,
     _ => Icons.notifications_active_outlined,
   };
+}
+
+class _NotificationBanner extends StatelessWidget {
+  const _NotificationBanner();
+
+  @override
+  Widget build(BuildContext context) => const FeatureBanner(
+    badge: 'Update terbaru',
+    title: 'Tidak ada informasi yang terlewat',
+    subtitle: 'Ketuk notifikasi untuk langsung menuju aktivitas terkait.',
+    icon: Icons.notifications_active_rounded,
+    supportingIcons: [
+      Icons.home_work_outlined,
+      Icons.workspace_premium_outlined,
+    ],
+  );
 }

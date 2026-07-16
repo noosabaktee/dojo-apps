@@ -9,6 +9,8 @@ import 'package:vibration/vibration.dart';
 class LocalNotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  ValueChanged<String>? _payloadHandler;
+  String? _pendingPayload;
 
   static const _attendanceChannel = AndroidNotificationDetails(
     'attendance_reminders',
@@ -40,7 +42,38 @@ class LocalNotificationService {
         requestSoundPermission: false,
       ),
     );
-    await _plugin.initialize(settings: settings);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) _deliverPayload(payload);
+      },
+    );
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    final launchPayload = launchDetails?.notificationResponse?.payload;
+    if (launchDetails?.didNotificationLaunchApp == true &&
+        launchPayload != null &&
+        launchPayload.isNotEmpty) {
+      _deliverPayload(launchPayload);
+    }
+  }
+
+  void setPayloadHandler(ValueChanged<String>? handler) {
+    _payloadHandler = handler;
+    final pending = _pendingPayload;
+    if (handler != null && pending != null) {
+      _pendingPayload = null;
+      handler(pending);
+    }
+  }
+
+  void _deliverPayload(String payload) {
+    final handler = _payloadHandler;
+    if (handler == null) {
+      _pendingPayload = payload;
+    } else {
+      handler(payload);
+    }
   }
 
   Future<bool> requestPermission() async {

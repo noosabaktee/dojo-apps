@@ -13,7 +13,8 @@ class AppSession extends ChangeNotifier {
   bool isSubmitting = false;
   String? error;
 
-  Future<void> bootstrap() async {
+  Future<void> bootstrap({Duration minimumDuration = Duration.zero}) async {
+    final startedAt = DateTime.now();
     isBootstrapping = true;
     notifyListeners();
     try {
@@ -24,6 +25,8 @@ class AppSession extends ChangeNotifier {
       await repository.client.clearToken();
       user = null;
     } finally {
+      final remaining = minimumDuration - DateTime.now().difference(startedAt);
+      if (remaining > Duration.zero) await Future<void>.delayed(remaining);
       isBootstrapping = false;
       notifyListeners();
     }

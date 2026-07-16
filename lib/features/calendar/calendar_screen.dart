@@ -17,8 +17,8 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
-  DateTime _selected = DateTime.now();
+  DateTime _month = DateTime(jakartaNow().year, jakartaNow().month);
+  DateTime _selected = jakartaNow();
   List<Map<String, dynamic>>? _events;
   String? _error;
 
@@ -75,6 +75,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
           const ScreenTitle(
             title: 'Calendar Sharing',
             subtitle: 'Temukan sesi berbagi dan agenda tim.',
+          ),
+          const SizedBox(height: 18),
+          const FeatureBanner(
+            badge: 'Agenda bersama',
+            title: 'Satu kalender untuk tumbuh bersama',
+            subtitle:
+                'Pantau jadwal sharing, topik, dan peserta dalam satu tempat.',
+            icon: Icons.calendar_month_rounded,
+            supportingIcons: [Icons.campaign_outlined, Icons.groups_2_outlined],
           ),
           const SizedBox(height: 20),
           Card(
@@ -185,7 +194,7 @@ class _MonthGrid extends StatelessWidget {
         if (day < 1 || day > days) return const SizedBox.shrink();
         final date = DateTime(month.year, month.month, day);
         final isSelected = _sameDay(date, selected);
-        final isToday = _sameDay(date, DateTime.now());
+        final isToday = _sameDay(date, jakartaNow());
         final hasEvent = events.any((event) {
           final eventDate = parseDate(event['date']);
           return eventDate != null && _sameDay(date, eventDate);

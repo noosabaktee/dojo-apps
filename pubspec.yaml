@@ -1,5 +1,5 @@
 name: dojo
-description: "KMI Internship Monitoring mobile application."
+description: "Dojo mobile application."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -16,11 +16,15 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   flutter_timezone: ^5.1.0
   geolocator: ^14.0.3
-  image_picker: ^1.2.3
   intl: ^0.20.3
   shared_preferences: ^2.5.5
   timezone: ^0.11.1
   vibration: ^3.2.0
+  camera: ^0.12.0+2
+  file_saver: ^0.4.0
+  file_selector: ^1.1.0
+  pdfrx: ^2.4.7
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -29,5 +33,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/images/

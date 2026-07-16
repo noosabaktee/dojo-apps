@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_theme.dart';
 import '../../models/app_user.dart';
+import '../../widgets/common.dart';
 
 class MenuScreen extends StatelessWidget {
   const MenuScreen({required this.user, required this.onOpen, super.key});
@@ -12,8 +13,10 @@ class MenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final features = <_MenuItem>[
-      if (user.isIntern)
-        const _MenuItem('evaluation', 'Rapor Intern', Icons.school_outlined),
+      if (user.isIntern) ...const [
+        _MenuItem('wfh', 'Pengajuan WFH', Icons.home_work_outlined),
+        _MenuItem('evaluation', 'Rapor Intern', Icons.school_outlined),
+      ],
       if (user.isAdmin) ...const [
         _MenuItem(
           'calendar',
@@ -21,10 +24,7 @@ class MenuScreen extends StatelessWidget {
           Icons.calendar_month_outlined,
         ),
         _MenuItem('evaluation', 'Rapor Intern', Icons.school_outlined),
-        _MenuItem('report', 'Report', Icons.analytics_outlined),
       ],
-      if (user.isMentor)
-        const _MenuItem('report', 'Report', Icons.analytics_outlined),
       const _MenuItem(
         'notifications',
         'Notifikasi',
@@ -42,6 +42,17 @@ class MenuScreen extends StatelessWidget {
         Text('Menu', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 5),
         Text('Akses fitur lainnya dan pengaturan akun ${user.roleLabel}.'),
+        const SizedBox(height: 18),
+        const FeatureBanner(
+          badge: 'Pusat fitur',
+          title: 'Semua kebutuhan dalam satu menu',
+          subtitle: 'Buka pengajuan, notifikasi, rapor, dan pengaturan akunmu.',
+          icon: Icons.grid_view_rounded,
+          supportingIcons: [
+            Icons.notifications_none_rounded,
+            Icons.person_outline_rounded,
+          ],
+        ),
         const SizedBox(height: 22),
         Container(
           padding: const EdgeInsets.all(18),

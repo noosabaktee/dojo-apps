@@ -7,7 +7,7 @@
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
 
     <application
-        android:label="Dojo Internship"
+        android:label="Dojo"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">

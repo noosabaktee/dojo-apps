@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/api_client.dart';
@@ -126,6 +127,30 @@ class AppRepository {
     return asMapList(result.data);
   }
 
+  Future<String> submitWfh({
+    required DateTime startDate,
+    required DateTime endDate,
+    required String reason,
+    required XFile attachment,
+  }) async {
+    final bytes = await attachment.readAsBytes();
+    if (bytes.isEmpty) {
+      throw const ApiException(
+        'Lampiran tidak dapat dibaca. Pilih ulang file.',
+      );
+    }
+    final result = await client.post(
+      '/work-from-home',
+      data: FormData.fromMap({
+        'start_date': _dateOnly(startDate),
+        'end_date': _dateOnly(endDate),
+        'reason': reason.trim(),
+        'attachment': MultipartFile.fromBytes(bytes, filename: attachment.name),
+      }),
+    );
+    return result.message;
+  }
+
   Future<String> reviewWfh(
     int id, {
     required bool approve,
@@ -133,10 +158,26 @@ class AppRepository {
   }) async {
     final result = await client.post(
       '/work-from-home/$id/${approve ? 'approve' : 'reject'}',
-      data: {if (note != null && note.isNotEmpty) 'review_note': note},
+      data: {'review_note': ?note},
     );
     return result.message;
   }
+
+  Future<String> cancelWfh(int id) async =>
+      (await client.post('/work-from-home/$id/cancel')).message;
+
+  Future<DownloadedFile> wfhAttachment(Map<String, dynamic> item) {
+    final id = item['id'];
+    final path = item['attachment_url']?.toString().isNotEmpty == true
+        ? item['attachment_url'].toString()
+        : '/work-from-home/$id/attachment';
+    return client.getFile(path, fallbackName: 'lampiran-wfh-$id');
+  }
+
+  Future<DownloadedFile> certificate(int evaluationId) => client.getFile(
+    '/me/evaluations/$evaluationId/certificate',
+    fallbackName: 'sertifikat-internship.pdf',
+  );
 
   Future<List<Map<String, dynamic>>> notifications({
     bool unreadOnly = false,
@@ -176,4 +217,9 @@ class AppRepository {
 
   static FormData multipart({required Map<String, dynamic> fields}) =>
       FormData.fromMap(fields);
+
+  static String _dateOnly(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 }

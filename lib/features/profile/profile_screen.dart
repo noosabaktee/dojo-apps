@@ -60,6 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirmed == true) {
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       await widget.session.logout();
     }
   }
@@ -73,108 +74,124 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const <String, dynamic>{};
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 42,
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    child: Text(
-                      widget.user.initials,
-                      style: const TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    widget.user.name,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(widget.user.email),
-                  const SizedBox(height: 10),
-                  StatusPill(widget.user.roleLabel),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 22),
-          const SectionHeading(title: 'Informasi'),
-          const SizedBox(height: 10),
-          Card(
-            child: Column(
-              children: [
-                _InfoTile(
-                  icon: Icons.badge_outlined,
-                  label: 'Nomor / Posisi',
-                  value:
-                      detail['number']?.toString() ??
-                      detail['position']?.toString() ??
-                      detail['role']?.toString() ??
-                      '-',
-                ),
-                const Divider(height: 1, indent: 58),
-                _InfoTile(
-                  icon: Icons.apartment_outlined,
-                  label: 'Departemen',
-                  value: detail['department']?.toString() ?? '-',
-                ),
-                if (detail['university'] != null) ...[
-                  const Divider(height: 1, indent: 58),
-                  _InfoTile(
-                    icon: Icons.account_balance_outlined,
-                    label: 'Universitas',
-                    value: detail['university'].toString(),
-                  ),
-                ],
+      body: AppPageBackground(
+        variant: 2,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+          children: [
+            FeatureBanner(
+              badge: widget.user.roleLabel,
+              title: 'Profil dan perangkatmu',
+              subtitle: 'Kelola informasi akun serta izin notifikasi aplikasi.',
+              icon: Icons.person_rounded,
+              supportingIcons: const [
+                Icons.badge_outlined,
+                Icons.notifications_active_outlined,
               ],
             ),
-          ),
-          const SizedBox(height: 22),
-          const SectionHeading(title: 'Perangkat'),
-          const SizedBox(height: 10),
-          Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 7,
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 42,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      child: Text(
+                        widget.user.initials,
+                        style: const TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      widget.user.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(widget.user.email),
+                    const SizedBox(height: 10),
+                    StatusPill(widget.user.roleLabel),
+                  ],
+                ),
               ),
-              leading: const Icon(
-                Icons.notifications_active_outlined,
-                color: AppColors.primary,
-              ),
-              title: const Text(
-                'Aktifkan notifikasi',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: const Text(
-                'Termasuk pengingat Clock In dan Clock Out.',
-              ),
-              trailing: _askingPermission
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.chevron_right_rounded),
-              onTap: _askingPermission ? null : _enableNotifications,
             ),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: _logout,
-            style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Keluar dari akun'),
-          ),
-        ],
+            const SizedBox(height: 22),
+            const SectionHeading(title: 'Informasi'),
+            const SizedBox(height: 10),
+            Card(
+              child: Column(
+                children: [
+                  _InfoTile(
+                    icon: Icons.badge_outlined,
+                    label: 'Nomor / Posisi',
+                    value:
+                        detail['number']?.toString() ??
+                        detail['position']?.toString() ??
+                        detail['role']?.toString() ??
+                        '-',
+                  ),
+                  const Divider(height: 1, indent: 58),
+                  _InfoTile(
+                    icon: Icons.apartment_outlined,
+                    label: 'Departemen',
+                    value: detail['department']?.toString() ?? '-',
+                  ),
+                  if (detail['university'] != null) ...[
+                    const Divider(height: 1, indent: 58),
+                    _InfoTile(
+                      icon: Icons.account_balance_outlined,
+                      label: 'Universitas',
+                      value: detail['university'].toString(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            const SectionHeading(title: 'Perangkat'),
+            const SizedBox(height: 10),
+            Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 7,
+                ),
+                leading: const Icon(
+                  Icons.notifications_active_outlined,
+                  color: AppColors.primary,
+                ),
+                title: const Text(
+                  'Aktifkan notifikasi',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text(
+                  'Termasuk pengingat Clock In dan Clock Out.',
+                ),
+                trailing: _askingPermission
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right_rounded),
+                onTap: _askingPermission ? null : _enableNotifications,
+              ),
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: _logout,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.danger,
+              ),
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Keluar dari akun'),
+            ),
+          ],
+        ),
       ),
     );
   }

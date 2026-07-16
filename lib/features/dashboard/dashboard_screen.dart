@@ -93,7 +93,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              firstName(widget.user.name),
+                              widget.user.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                           ],
@@ -111,49 +113,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     user: widget.user,
                     today: today,
                     onTap: () => widget.onOpenFeature(
-                      widget.user.isIntern ? 'attendance' : 'report',
+                      widget.user.isIntern ? 'attendance' : 'evaluation',
                     ),
                   ),
                   const SizedBox(height: 26),
                   const SectionHeading(title: 'Ringkasan hari ini'),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    height: 150,
-                    child: GridView.count(
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      childAspectRatio: 1.45,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      children: widget.user.isIntern
-                          ? [
-                              MetricCard(
-                                label: 'Progress rata-rata',
-                                value:
-                                    '${asDouble(data['average_progress']).round()}%',
-                                icon: Icons.trending_up_rounded,
-                              ),
-                              MetricCard(
-                                label: 'Project aktif',
-                                value: compactNumber(data['active_projects']),
-                                icon: Icons.work_outline_rounded,
-                                color: const Color(0xFF2563EB),
-                              ),
-                            ]
-                          : [
-                              MetricCard(
-                                label: 'Intern aktif',
-                                value: compactNumber(data['total_interns']),
-                                icon: Icons.groups_2_outlined,
-                              ),
-                              MetricCard(
-                                label: 'Project aktif',
-                                value: compactNumber(data['active_projects']),
-                                icon: Icons.work_outline_rounded,
-                                color: const Color(0xFF2563EB),
-                              ),
-                            ],
-                    ),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    childAspectRatio: 1.5,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    children: widget.user.isIntern
+                        ? [
+                            MetricCard(
+                              label: 'Project aktif',
+                              value: compactNumber(data['active_projects']),
+                              icon: Icons.work_outline_rounded,
+                              color: const Color(0xFF2563EB),
+                            ),
+                            MetricCard(
+                              label: 'Progress rata-rata',
+                              value:
+                                  '${asDouble(data['average_progress']).toStringAsFixed(1)}%',
+                              icon: Icons.trending_up_rounded,
+                              color: const Color(0xFF8B5CF6),
+                            ),
+                            MetricCard(
+                              label: 'Rapor selesai',
+                              value: compactNumber(data['completed_reports']),
+                              icon: Icons.school_outlined,
+                              color: const Color(0xFFF59E0B),
+                            ),
+                            MetricCard(
+                              label: 'Achievement',
+                              value: compactNumber(data['achievements']),
+                              icon: Icons.workspace_premium_outlined,
+                            ),
+                          ]
+                        : [
+                            MetricCard(
+                              label: 'Intern aktif',
+                              value: compactNumber(data['total_interns']),
+                              icon: Icons.groups_2_outlined,
+                            ),
+                            MetricCard(
+                              label: 'Project aktif',
+                              value: compactNumber(data['active_projects']),
+                              icon: Icons.work_outline_rounded,
+                              color: const Color(0xFF2563EB),
+                            ),
+                            MetricCard(
+                              label: 'Progress rata-rata',
+                              value:
+                                  '${asDouble(data['average_progress']).toStringAsFixed(1)}%',
+                              icon: Icons.trending_up_rounded,
+                              color: const Color(0xFF8B5CF6),
+                            ),
+                            MetricCard(
+                              label: 'Rapor selesai',
+                              value: compactNumber(data['completed_reports']),
+                              icon: Icons.school_outlined,
+                              color: const Color(0xFFF59E0B),
+                            ),
+                          ],
                   ),
                   const SizedBox(height: 26),
                   const SectionHeading(title: 'Akses cepat'),
@@ -236,87 +261,93 @@ class _HeroCard extends StatelessWidget {
               : checkedIn
               ? 'Clock In ${formatTime(today['clock_in'])} WIB • ${today['work_mode'] ?? 'Office'}'
               : 'Catat kehadiran menggunakan Face ID dan lokasi.'
-        : 'Progress, agenda, dan laporan penting tersedia dalam satu tempat.';
+        : 'Progress, agenda, dan aktivitas penting tersedia dalam satu tempat.';
 
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(24),
-      child: Ink(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF064928), AppColors.primary, Color(0xFF4F982B)],
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33006838),
-              blurRadius: 24,
-              offset: Offset(0, 12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.primaryDark,
+                AppColors.primary,
+                Color(0xFF3E8B35),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .16),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      user.roleLabel,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x3D006838),
+                blurRadius: 28,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .16),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        user.roleLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    title,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(color: Colors.white),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      color: Color(0xFFDCEFE2),
-                      height: 1.35,
+                    const SizedBox(height: 18),
+                    Text(
+                      title,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(color: Colors.white),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        color: Color(0xFFE2F2E6),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 14),
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .14),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                user.isIntern
+              const SizedBox(width: 14),
+              FeatureIconCluster(
+                width: 92,
+                height: 104,
+                mainIcon: user.isIntern
                     ? Icons.fingerprint_rounded
-                    : Icons.insights_rounded,
-                color: Colors.white,
-                size: 28,
+                    : Icons.monitor_heart_outlined,
+                supportingIcons: user.isIntern
+                    ? const [Icons.location_on_outlined, Icons.schedule_rounded]
+                    : const [
+                        Icons.groups_2_outlined,
+                        Icons.trending_up_rounded,
+                      ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -333,62 +364,141 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions = user.isIntern
         ? const [
-            ('attendance', 'Absensi', Icons.fingerprint_rounded),
-            ('calendar', 'Kalender', Icons.calendar_month_outlined),
-            ('evaluation', 'Rapor', Icons.school_outlined),
+            (
+              'attendance',
+              'Absensi',
+              Icons.fingerprint_rounded,
+              AppColors.primary,
+            ),
+            (
+              'wfh',
+              'Pengajuan WFH',
+              Icons.home_work_outlined,
+              Color(0xFF2563EB),
+            ),
+            ('evaluation', 'Rapor', Icons.school_outlined, Color(0xFFF59E0B)),
           ]
         : user.isMentor
         ? const [
-            ('evaluation', 'Rapor', Icons.school_outlined),
-            ('calendar', 'Kalender', Icons.calendar_month_outlined),
-            ('report', 'Report', Icons.analytics_outlined),
+            ('evaluation', 'Rapor', Icons.school_outlined, Color(0xFFF59E0B)),
+            (
+              'calendar',
+              'Kalender',
+              Icons.calendar_month_outlined,
+              Color(0xFF2563EB),
+            ),
+            (
+              'leaderboard',
+              'Peringkat',
+              Icons.emoji_events_outlined,
+              AppColors.primary,
+            ),
           ]
         : const [
-            ('attendance', 'Absensi', Icons.fact_check_outlined),
-            ('wfh', 'Review WFH', Icons.home_work_outlined),
-            ('report', 'Report', Icons.analytics_outlined),
+            (
+              'attendance',
+              'Absensi',
+              Icons.fact_check_outlined,
+              AppColors.primary,
+            ),
+            ('wfh', 'Review WFH', Icons.home_work_outlined, Color(0xFF2563EB)),
+            ('evaluation', 'Rapor', Icons.school_outlined, Color(0xFFF59E0B)),
           ];
-    return Row(
-      children: actions
-          .map(
-            (item) => Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: item == actions.last ? 0 : 10),
-                child: InkWell(
-                  onTap: () => onTap(item.$1),
-                  borderRadius: BorderRadius.circular(18),
-                  child: Ink(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(item.$3, color: AppColors.primary),
-                        const SizedBox(height: 8),
-                        Text(
-                          item.$2,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
+    return SizedBox(
+      height: 124,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: actions
+            .map(
+              (item) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: item == actions.last ? 0 : 10,
+                  ),
+                  child: _QuickActionCard(
+                    label: item.$2,
+                    icon: item.$3,
+                    color: item.$4,
+                    onTap: () => onTap(item.$1),
                   ),
                 ),
               ),
-            ),
-          )
-          .toList(),
+            )
+            .toList(),
+      ),
     );
   }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(20),
+    clipBehavior: Clip.antiAlias,
+    child: Ink(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, color.withValues(alpha: .12)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: .22)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D17221C),
+            blurRadius: 16,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: color, size: 21),
+              ),
+              const Spacer(),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _EventTile extends StatelessWidget {
