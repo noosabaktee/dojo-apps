@@ -70,13 +70,38 @@ class ApiClient {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.248.169.48:8000/api/v1',
+    defaultValue: 'http://192.168.8.176:8000/api/v1',
   );
   static const _tokenKey = 'dojo_api_token';
 
   final Dio _dio;
   final FlutterSecureStorage _storage;
   VoidCallback? onUnauthorized;
+
+  static String? publicFileUrl(String? path) {
+    final value = path?.trim();
+    if (value == null || value.isEmpty) return null;
+    final parsed = Uri.tryParse(value);
+    if (parsed?.hasScheme == true) return value;
+    final apiUri = Uri.parse(baseUrl);
+    final segments = [...apiUri.pathSegments];
+    final apiIndex = segments.indexOf('api');
+    final publicSegments = apiIndex >= 0
+        ? segments.take(apiIndex).toList()
+        : <String>[];
+    final normalized = value
+        .replaceFirst(RegExp(r'^/+'), '')
+        .replaceFirst(RegExp(r'^storage/+'), '');
+    return apiUri
+        .replace(
+          pathSegments: [
+            ...publicSegments,
+            'storage',
+            ...normalized.split('/').where((segment) => segment.isNotEmpty),
+          ],
+        )
+        .toString();
+  }
 
   Future<bool> hasToken() async =>
       (await _storage.read(key: _tokenKey))?.isNotEmpty == true;

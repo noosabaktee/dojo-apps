@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
@@ -34,11 +35,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Map<int, String> _internNames = const {};
   String? _error;
   bool _processing = false;
+  int _adminTab = 0;
+  DateTimeRange? _attendanceRange;
+  List<Map<String, dynamic>>? _internGroups;
+  String? _filteredError;
+  bool _loadingFiltered = false;
+  Timer? _clockOutAvailabilityTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _clockOutAvailabilityTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -61,6 +74,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _error = null;
       });
       if (widget.user.isIntern) {
+        _scheduleClockOutAvailability(asMap(data['settings']));
         await widget.notifications.scheduleAttendanceReminders(
           asMap(data['settings']),
         );
@@ -70,28 +84,74 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  Future<void> _performAction(bool checkIn) async {
-    final imageBytes = await showModalBottomSheet<Uint8List>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _AttendanceCameraSheet(checkIn: checkIn),
-    );
-    if (imageBytes == null || !mounted) return;
+  ({int hour, int minute})? _attendanceTime(dynamic value) {
+    final parts = value?.toString().split(':');
+    if (parts == null || parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59) {
+      return null;
+    }
+    return (hour: hour, minute: minute);
+  }
 
+  bool _clockOutHasStarted(dynamic value) {
+    final time = _attendanceTime(value);
+    if (time == null) return false;
+    final now = jakartaNow();
+    return now.hour > time.hour ||
+        (now.hour == time.hour && now.minute >= time.minute);
+  }
+
+  void _scheduleClockOutAvailability(Map<String, dynamic> settings) {
+    _clockOutAvailabilityTimer?.cancel();
+    final time = _attendanceTime(settings['clock_out_start']);
+    if (time == null) return;
+    final now = jakartaNow();
+    final secondsUntilStart =
+        time.hour * 3600 +
+        time.minute * 60 -
+        (now.hour * 3600 + now.minute * 60 + now.second);
+    if (secondsUntilStart <= 0) return;
+    _clockOutAvailabilityTimer = Timer(
+      Duration(seconds: secondsUntilStart + 1),
+      () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  Future<void> _performAction(bool checkIn) async {
     setState(() => _processing = true);
     try {
-      final position = await _position();
-      final result = await widget.repository.attendanceAction(
-        checkIn: checkIn,
-        imageBytes: imageBytes,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        accuracy: position.accuracy,
+      final result = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        enableDrag: false,
+        isDismissible: false,
+        builder: (_) => _AttendanceCameraSheet(
+          checkIn: checkIn,
+          onVerify: (imageBytes) async {
+            final position = await _position();
+            return widget.repository.attendanceAction(
+              checkIn: checkIn,
+              imageBytes: imageBytes,
+              latitude: position.latitude,
+              longitude: position.longitude,
+              accuracy: position.accuracy,
+            );
+          },
+        ),
       );
-      if (!mounted) return;
+      if (result == null || !mounted) return;
       showMessage(
         context,
         checkIn ? 'Clock In berhasil dicatat.' : 'Clock Out berhasil dicatat.',
@@ -100,14 +160,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _data = {...?_data, 'today': result};
       });
       await _load();
-    } on ApiException catch (exception) {
-      if (mounted) {
-        await showAppAlert(
-          context,
-          title: 'Absensi belum berhasil',
-          message: exception.message,
-        );
-      }
     } catch (error) {
       if (mounted) {
         await showAppAlert(
@@ -118,6 +170,65 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     } finally {
       if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  Future<void> _pickAttendanceRange() async {
+    final now = jakartaNow();
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialDateRange:
+          _attendanceRange ??
+          DateTimeRange(
+            start: DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).subtract(const Duration(days: 29)),
+            end: DateTime(now.year, now.month, now.day),
+          ),
+      helpText: 'Pilih periode absensi',
+      cancelText: 'Batal',
+      confirmText: 'Terapkan',
+      saveText: 'Terapkan',
+      fieldStartHintText: 'Dari tanggal',
+      fieldEndHintText: 'Sampai tanggal',
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _attendanceRange = selected;
+      _internGroups = null;
+    });
+    await _loadFiltered();
+  }
+
+  Future<void> _loadFiltered() async {
+    final range = _attendanceRange;
+    if (range == null) return;
+    setState(() {
+      _loadingFiltered = true;
+      _filteredError = null;
+    });
+    try {
+      final groups = await widget.repository.attendanceInternGroups(
+        from: range.start,
+        to: range.end,
+      );
+      if (!mounted) return;
+      setState(() => _internGroups = groups);
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => _filteredError = exception.message);
+    } finally {
+      if (mounted) setState(() => _loadingFiltered = false);
+    }
+  }
+
+  Future<void> _refreshAdmin() async {
+    await _load();
+    if (_adminTab == 1 && _attendanceRange != null) {
+      await _loadFiltered();
     }
   }
 
@@ -209,6 +320,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final faceRegistered = _data!['face_registered'] == true;
     final checkedIn = today['clock_in'] != null;
     final checkedOut = today['clock_out'] != null;
+    final clockOutStarted = _clockOutHasStarted(settings['clock_out_start']);
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -305,7 +417,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: _processing || !faceRegistered || checkedOut
+                    onPressed:
+                        _processing ||
+                            !faceRegistered ||
+                            checkedOut ||
+                            (checkedIn && !clockOutStarted)
                         ? null
                         : () => _performAction(!checkedIn),
                     icon: _processing
@@ -317,13 +433,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             ),
                           )
                         : Icon(
-                            checkedIn
+                            checkedIn && !clockOutStarted
+                                ? Icons.lock_clock_outlined
+                                : checkedIn
                                 ? Icons.logout_rounded
                                 : Icons.login_rounded,
                           ),
                     label: Text(
                       checkedOut
                           ? 'Selesai hari ini'
+                          : checkedIn && !clockOutStarted
+                          ? 'Clock Out mulai ${settings['clock_out_start'] ?? '--:--'} WIB'
                           : checkedIn
                           ? 'Clock Out sekarang'
                           : 'Clock In sekarang',
@@ -370,7 +490,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _adminView() {
-    final records = asMapList(_data!['records']);
     final todayRecords = asMapList(_data!['today_records']);
     final summary = asMap(_data!['today_summary']);
     final total = asInt(summary['total']);
@@ -378,93 +497,459 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final completed = asInt(summary['completed']);
     final pending = asInt(summary['not_checked_in']);
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: _refreshAdmin,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
           const ScreenTitle(
             title: 'Monitoring Absensi',
-            subtitle: 'Rekap kehadiran seluruh intern dalam satu layar.',
+            subtitle: 'Pantau absensi hari ini atau pilih periode riwayat.',
           ),
           const SizedBox(height: 18),
-          FeatureBanner(
-            badge: '${formatShortDate(jakartaNow())} • WIB',
-            title: '$present dari $total intern sudah hadir',
-            subtitle: pending == 0
-                ? 'Seluruh intern sudah melakukan Clock In hari ini.'
-                : '$pending intern masih belum melakukan Clock In.',
-            icon: Icons.groups_2_rounded,
-            supportingIcons: const [
-              Icons.fact_check_outlined,
-              Icons.location_on_outlined,
-            ],
-          ),
-          const SizedBox(height: 20),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            childAspectRatio: 1.48,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [
-              MetricCard(
-                label: 'Total intern',
-                value: '$total',
-                icon: Icons.groups_2_outlined,
+          DefaultTabController(
+            length: 2,
+            initialIndex: _adminTab,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.border),
               ),
-              MetricCard(
-                label: 'Sudah Clock In',
-                value: '$present',
-                icon: Icons.login_rounded,
-                color: const Color(0xFF2563EB),
-              ),
-              MetricCard(
-                label: 'Absensi lengkap',
-                value: '$completed',
-                icon: Icons.task_alt_rounded,
-                color: const Color(0xFF8B5CF6),
-              ),
-              MetricCard(
-                label: 'Belum Clock In',
-                value: '$pending',
-                icon: Icons.schedule_rounded,
-                color: AppColors.warning,
-              ),
-            ],
-          ),
-          const SizedBox(height: 25),
-          const SectionHeading(title: 'Rekap seluruh intern hari ini'),
-          const SizedBox(height: 10),
-          if (todayRecords.isEmpty)
-            const EmptyState(
-              title: 'Rekap belum tersedia',
-              message: 'Tarik layar ke bawah untuk memuat ulang data hari ini.',
-            )
-          else
-            ...todayRecords.map(
-              (record) => _AttendanceTile(
-                record: record,
-                name:
-                    asMap(record['intern'])['name']?.toString() ??
-                    _internNames[asInt(record['intern_id'])],
+              child: TabBar(
+                onTap: (index) => setState(() => _adminTab = index),
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'Absensi Hari Ini'),
+                  Tab(text: 'Semua Absensi'),
+                ],
               ),
             ),
-          if (records.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            const SectionHeading(title: 'Riwayat terbaru'),
-            const SizedBox(height: 10),
-            ...records
-                .take(12)
-                .map(
-                  (record) => _AttendanceTile(
-                    record: record,
-                    name: _internNames[asInt(record['intern_id'])],
-                  ),
+          ),
+          const SizedBox(height: 20),
+          if (_adminTab == 0) ...[
+            FeatureBanner(
+              badge: '${formatShortDate(jakartaNow())} • WIB',
+              title: '$present dari $total intern sudah hadir',
+              subtitle: pending == 0
+                  ? 'Seluruh intern sudah melakukan Clock In hari ini.'
+                  : '$pending intern masih belum melakukan Clock In.',
+              icon: Icons.groups_2_rounded,
+              supportingIcons: const [
+                Icons.fact_check_outlined,
+                Icons.location_on_outlined,
+              ],
+            ),
+            const SizedBox(height: 20),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              childAspectRatio: 1.48,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              children: [
+                MetricCard(
+                  label: 'Total intern',
+                  value: '$total',
+                  icon: Icons.groups_2_outlined,
                 ),
+                MetricCard(
+                  label: 'Sudah Clock In',
+                  value: '$present',
+                  icon: Icons.login_rounded,
+                  color: const Color(0xFF2563EB),
+                ),
+                MetricCard(
+                  label: 'Absensi lengkap',
+                  value: '$completed',
+                  icon: Icons.task_alt_rounded,
+                  color: const Color(0xFF8B5CF6),
+                ),
+                MetricCard(
+                  label: 'Belum Clock In',
+                  value: '$pending',
+                  icon: Icons.schedule_rounded,
+                  color: AppColors.warning,
+                ),
+              ],
+            ),
+            const SizedBox(height: 25),
+            const SectionHeading(title: 'Rekap seluruh intern hari ini'),
+            const SizedBox(height: 10),
+            if (todayRecords.isEmpty)
+              const EmptyState(
+                title: 'Rekap belum tersedia',
+                message:
+                    'Tarik layar ke bawah untuk memuat ulang data hari ini.',
+              )
+            else
+              ...todayRecords.map(
+                (record) => _AttendanceTile(
+                  record: record,
+                  name:
+                      asMap(record['intern'])['name']?.toString() ??
+                      _internNames[asInt(record['intern_id'])],
+                ),
+              ),
+          ] else ...[
+            _AttendanceRangeFilter(
+              range: _attendanceRange,
+              loading: _loadingFiltered,
+              onTap: _loadingFiltered ? null : _pickAttendanceRange,
+            ),
+            const SizedBox(height: 18),
+            if (_attendanceRange == null)
+              const EmptyState(
+                title: 'Pilih periode terlebih dahulu',
+                message:
+                    'Tentukan tanggal mulai dan selesai untuk menampilkan semua absensi.',
+                icon: Icons.date_range_rounded,
+              )
+            else if (_loadingFiltered && _internGroups == null)
+              const LoadingList()
+            else if (_filteredError != null)
+              ErrorState(message: _filteredError!, onRetry: _loadFiltered)
+            else if (_internGroups?.isEmpty != false)
+              const EmptyState(
+                title: 'Tidak ada absensi',
+                message: 'Tidak ada intern pada periode yang dipilih.',
+                icon: Icons.event_busy_outlined,
+              )
+            else ...[
+              SectionHeading(title: '${_internGroups!.length} intern'),
+              const SizedBox(height: 10),
+              ..._internGroups!.map(
+                (group) => _InternAttendanceCard(
+                  group: group,
+                  range: _attendanceRange!,
+                ),
+              ),
+            ],
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AttendanceRangeFilter extends StatelessWidget {
+  const _AttendanceRangeFilter({
+    required this.range,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final DateTimeRange? range;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.filter_alt_outlined, color: AppColors.primary),
+              SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Filter periode wajib diisi',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: AppColors.canvas,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.date_range_rounded, color: AppColors.muted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    range == null
+                        ? 'Dari tanggal — Sampai tanggal'
+                        : '${formatShortDate(range!.start)} — ${formatShortDate(range!.end)}',
+                    style: TextStyle(
+                      color: range == null ? AppColors.muted : AppColors.ink,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onTap,
+              icon: loading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.tune_rounded),
+              label: Text(
+                loading
+                    ? 'Memuat absensi...'
+                    : range == null
+                    ? 'Pilih tanggal'
+                    : 'Ubah periode',
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _InternAttendanceCard extends StatelessWidget {
+  const _InternAttendanceCard({required this.group, required this.range});
+
+  final Map<String, dynamic> group;
+  final DateTimeRange range;
+
+  @override
+  Widget build(BuildContext context) {
+    final intern = asMap(group['intern']);
+    final summary = asMap(group['summary']);
+    final records = asMapList(group['records']);
+    final name = intern['name']?.toString().trim();
+    final displayName = name?.isNotEmpty == true ? name! : 'Intern';
+    final number = intern['number']?.toString().trim();
+    final initial = displayName.substring(0, 1).toUpperCase();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 11),
+      child: InkWell(
+        onTap: records.isEmpty
+            ? null
+            : () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      _InternAttendanceDetailScreen(group: group, range: range),
+                ),
+              ),
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: AppColors.mint,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          [
+                            if (number?.isNotEmpty == true) number!,
+                            '${asInt(summary['total'])} hari kerja',
+                          ].join(' • '),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.muted,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 13),
+              _AttendanceSummaryCounts(summary: summary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceSummaryCounts extends StatelessWidget {
+  const _AttendanceSummaryCounts({required this.summary});
+
+  final Map<String, dynamic> summary;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 7,
+    runSpacing: 7,
+    children: [
+      _AttendanceStatusCount(
+        label: 'Hadir',
+        count: asInt(summary['present']),
+        color: AppColors.primary,
+      ),
+      _AttendanceStatusCount(
+        label: 'Terlambat',
+        count: asInt(summary['late']),
+        color: AppColors.warning,
+      ),
+      _AttendanceStatusCount(
+        label: 'Tidak masuk',
+        count: asInt(summary['absent']),
+        color: AppColors.danger,
+      ),
+      if (asInt(summary['pending']) > 0)
+        _AttendanceStatusCount(
+          label: 'Belum absen',
+          count: asInt(summary['pending']),
+          color: const Color(0xFF2563EB),
+        ),
+    ],
+  );
+}
+
+class _AttendanceStatusCount extends StatelessWidget {
+  const _AttendanceStatusCount({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  final String label;
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .1),
+      borderRadius: BorderRadius.circular(99),
+      border: Border.all(color: color.withValues(alpha: .16)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label $count',
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _InternAttendanceDetailScreen extends StatelessWidget {
+  const _InternAttendanceDetailScreen({
+    required this.group,
+    required this.range,
+  });
+
+  final Map<String, dynamic> group;
+  final DateTimeRange range;
+
+  @override
+  Widget build(BuildContext context) {
+    final intern = asMap(group['intern']);
+    final summary = asMap(group['summary']);
+    final records = asMapList(group['records']);
+    final name = intern['name']?.toString() ?? 'Intern';
+    final number = intern['number']?.toString();
+    final period = '${formatDate(range.start)} — ${formatDate(range.end)}';
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Riwayat Absensi')),
+      body: AppPageBackground(
+        variant: 1,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          children: [
+            FeatureBanner(
+              badge: number?.isNotEmpty == true ? number : 'Intern',
+              title: name,
+              subtitle: period,
+              icon: Icons.person_rounded,
+              supportingIcons: const [
+                Icons.fact_check_outlined,
+                Icons.date_range_rounded,
+              ],
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _AttendanceSummaryCounts(summary: summary),
+              ),
+            ),
+            const SizedBox(height: 22),
+            SectionHeading(
+              title: 'Riwayat harian',
+              action: Text(
+                '${asInt(summary['total'])} hari',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (records.isEmpty)
+              const EmptyState(
+                title: 'Absensi belum tersedia',
+                message: 'Belum ada detail absensi dalam periode ini.',
+              )
+            else
+              ...records.map((record) => _AttendanceTile(record: record)),
+          ],
+        ),
       ),
     );
   }
@@ -532,9 +1017,10 @@ class _TimeBox extends StatelessWidget {
 }
 
 class _AttendanceCameraSheet extends StatefulWidget {
-  const _AttendanceCameraSheet({required this.checkIn});
+  const _AttendanceCameraSheet({required this.checkIn, required this.onVerify});
 
   final bool checkIn;
+  final Future<Map<String, dynamic>> Function(Uint8List imageBytes) onVerify;
 
   @override
   State<_AttendanceCameraSheet> createState() => _AttendanceCameraSheetState();
@@ -544,6 +1030,8 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
   CameraController? _controller;
   String? _error;
   bool _taking = false;
+  Timer? _countdownTimer;
+  int _countdown = 3;
 
   @override
   void initState() {
@@ -553,12 +1041,14 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _initialize() async {
     final previous = _controller;
+    _countdownTimer?.cancel();
     _controller = null;
     await previous?.dispose();
     if (!mounted) return;
@@ -587,7 +1077,8 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
         await controller.dispose();
         return;
       }
-      setState(() {});
+      setState(() => _countdown = 3);
+      _startCountdown();
     } on CameraException catch (exception) {
       if (!mounted) return;
       setState(() {
@@ -601,7 +1092,24 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
     }
   }
 
-  Future<void> _capture() async {
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_countdown <= 1) {
+        timer.cancel();
+        setState(() => _countdown = 0);
+        _captureAndVerify();
+      } else {
+        setState(() => _countdown--);
+      }
+    });
+  }
+
+  Future<void> _captureAndVerify() async {
     final controller = _controller;
     if (_taking || controller == null || !controller.value.isInitialized) {
       return;
@@ -611,13 +1119,29 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
       final photo = await controller.takePicture();
       final bytes = await photo.readAsBytes();
       if (!mounted) return;
-      Navigator.of(context).pop(bytes);
+      final result = await widget.onVerify(bytes);
+      if (!mounted) return;
+      Navigator.of(context).pop(result);
     } on CameraException {
       if (mounted) {
         setState(() {
           _taking = false;
           _error =
-              'Foto gagal diambil. Pastikan kamera tidak digunakan aplikasi lain.';
+              'Live camera terhenti. Pastikan kamera tidak digunakan aplikasi lain.';
+        });
+      }
+    } on ApiException catch (exception) {
+      if (mounted) {
+        setState(() {
+          _taking = false;
+          _error = exception.message;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _taking = false;
+          _error = error.toString().replaceFirst('Exception: ', '');
         });
       }
     }
@@ -687,6 +1211,7 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
           Expanded(
             child: Stack(
               fit: StackFit.expand,
+              clipBehavior: Clip.hardEdge,
               children: [
                 if (_error != null)
                   _CameraError(message: _error!, onRetry: _initialize)
@@ -699,6 +1224,12 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
                 if (_error == null) ...[
                   const Center(child: _FaceOval()),
                   const Positioned(top: 16, left: 16, child: _LiveBadge()),
+                  if (ready && !_taking && _countdown > 0)
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: _CountdownBadge(value: _countdown),
+                    ),
                 ],
                 if (_taking)
                   const ColoredBox(
@@ -710,43 +1241,64 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
-            child: Column(
-              children: [
-                const Text(
-                  'Posisikan wajah di dalam bingkai dan pastikan pencahayaan cukup.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFFDCEFE2)),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: ready && !_taking ? _capture : null,
-                    icon: _taking
-                        ? const SizedBox.square(
-                            dimension: 19,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.camera_alt_rounded),
-                    label: Text(
-                      widget.checkIn
-                          ? 'Ambil foto & Clock In'
-                          : 'Ambil foto & Clock Out',
+          ColoredBox(
+            color: const Color(0xFF101713),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
+              child: Column(
+                children: [
+                  Text(
+                    _taking
+                        ? 'Memverifikasi Face ID dan lokasi dari live camera...'
+                        : 'Posisikan wajah di dalam bingkai. Verifikasi berjalan otomatis.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFFDCEFE2)),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _taking
+                        ? 'Jangan tutup aplikasi selama proses berlangsung.'
+                        : 'Tidak ada foto yang disimpan ke galeri.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFAEC3B4),
+                      fontSize: 12,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _CountdownBadge extends StatelessWidget {
+  const _CountdownBadge({required this.value});
+
+  final int value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 62,
+    height: 62,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: const Color(0xCC101713),
+      shape: BoxShape.circle,
+      border: Border.all(color: const Color(0xFF5EE58C), width: 2),
+    ),
+    child: Text(
+      '$value',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 28,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _LiveBadge extends StatelessWidget {
@@ -789,6 +1341,7 @@ class _CameraPreviewSurface extends StatelessWidget {
     if (size == null) return CameraPreview(controller);
     return FittedBox(
       fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
       child: SizedBox(
         width: size.height,
         height: size.width,

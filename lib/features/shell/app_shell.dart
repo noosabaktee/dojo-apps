@@ -41,6 +41,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
   Timer? _pollTimer;
   Set<int>? _knownNotificationIds;
+  final ValueNotifier<int> _unreadCount = ValueNotifier(0);
+  bool _pollingNotifications = false;
   late List<_Destination> _destinationItems;
   late List<Widget> _pages;
 
@@ -170,6 +172,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         oldWidget.user.role != widget.user.role) {
       _index = 0;
       _syncPages();
+    } else if (oldWidget.user.name != widget.user.name ||
+        oldWidget.user.profilePhoto != widget.user.profilePhoto) {
+      _syncPages();
     }
   }
 
@@ -189,6 +194,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     widget.notifications.setPayloadHandler(null);
     _pollTimer?.cancel();
+    _unreadCount.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -199,12 +205,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _pollNotifications() async {
+    if (_pollingNotifications) return;
+    _pollingNotifications = true;
     try {
       final items = await widget.repository.notifications(unreadOnly: true);
+      if (!mounted) return;
       final currentIds = items.map((item) => asInt(item['id'])).toSet();
+      _unreadCount.value = currentIds.length;
+      await widget.notifications.syncUnreadBadge(currentIds.length);
       final known = _knownNotificationIds;
       _knownNotificationIds = currentIds;
       if (known == null) return;
+      for (final id in known.difference(currentIds)) {
+        await widget.notifications.dismissServerUpdate(id, currentIds.length);
+      }
       final newItems = items.where(
         (item) => !known.contains(asInt(item['id'])),
       );
@@ -213,11 +227,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           id: asInt(item['id']),
           title: item['title']?.toString() ?? 'Update Dojo',
           body: item['message']?.toString() ?? '',
+          unreadCount: currentIds.length,
           payload: item['link']?.toString() ?? item['type']?.toString() ?? '',
         );
       }
     } on ApiException {
       // Polling is opportunistic; feature screens still expose manual refresh.
+    } catch (_) {
+      // A notification host failure must not interrupt the application.
+    } finally {
+      _pollingNotifications = false;
     }
   }
 
@@ -260,6 +279,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         MaterialPageRoute<void>(
           builder: (routeContext) => NotificationsScreen(
             repository: widget.repository,
+            notifications: widget.notifications,
+            onUnreadCountChanged: (count) => _unreadCount.value = count,
             onOpenLink: (link) {
               Navigator.of(routeContext).pop();
               unawaited(_openLinkAfterRouteCloses(link));
@@ -320,9 +341,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         repository: widget.repository,
         onOpenFeature: _openFeature,
         onOpenNotifications: () => _openFeature('notifications'),
+        unreadCount: _unreadCount,
       ),
       'leaderboard' => LeaderboardScreen(repository: widget.repository),
-      'menu' => MenuScreen(user: widget.user, onOpen: _openFeature),
+      'menu' => MenuScreen(
+        user: widget.user,
+        onOpen: _openFeature,
+        unreadCount: _unreadCount,
+      ),
       _ => _featureFor(key)!,
     };
   }

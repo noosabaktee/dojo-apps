@@ -1,14 +1,22 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../models/app_user.dart';
 import '../../widgets/common.dart';
 
 class MenuScreen extends StatelessWidget {
-  const MenuScreen({required this.user, required this.onOpen, super.key});
+  const MenuScreen({
+    required this.user,
+    required this.onOpen,
+    required this.unreadCount,
+    super.key,
+  });
 
   final AppUser user;
   final ValueChanged<String> onOpen;
+  final ValueListenable<int> unreadCount;
 
   @override
   Widget build(BuildContext context) {
@@ -64,15 +72,7 @@ class MenuScreen extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 27,
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.primary,
-                child: Text(
-                  user.initials,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
+              _MenuAvatar(user: user),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -120,10 +120,25 @@ class MenuScreen extends StatelessWidget {
                 item.label,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              trailing: const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.muted,
-              ),
+              trailing: item.key == 'notifications'
+                  ? ValueListenableBuilder<int>(
+                      valueListenable: unreadCount,
+                      builder: (_, count, _) => Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (count > 0) _UnreadCountBadge(count: count),
+                          if (count > 0) const SizedBox(width: 7),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.muted,
+                          ),
+                        ],
+                      ),
+                    )
+                  : const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.muted,
+                    ),
               onTap: () => onOpen(item.key),
             ),
           ),
@@ -131,6 +146,71 @@ class MenuScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+class _MenuAvatar extends StatelessWidget {
+  const _MenuAvatar({required this.user});
+
+  final AppUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = ApiClient.publicFileUrl(user.profilePhoto);
+    return ClipOval(
+      child: SizedBox.square(
+        dimension: 54,
+        child: ColoredBox(
+          color: Colors.white,
+          child: photoUrl == null
+              ? _initials()
+              : Image.network(
+                  photoUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => _initials(),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _initials() => Center(
+    child: Text(
+      user.initials,
+      style: const TextStyle(
+        color: AppColors.primary,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
+}
+
+class _UnreadCountBadge extends StatelessWidget {
+  const _UnreadCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => UnconstrainedBox(
+    child: SizedBox.square(
+      dimension: 30,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppColors.danger,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            count > 99 ? '99+' : '$count',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: count > 99 ? 8.5 : 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _MenuItem {

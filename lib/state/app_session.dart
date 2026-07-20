@@ -60,6 +60,13 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  Future<AppUser> refreshUser() async {
+    final refreshed = await repository.me();
+    user = refreshed;
+    notifyListeners();
+    return refreshed;
+  }
+
   void expire() {
     user = null;
     error = 'Sesi berakhir. Silakan masuk kembali.';

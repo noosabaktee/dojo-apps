@@ -51,12 +51,35 @@ class AppRepository {
   Future<Map<String, dynamic>> leaderboard() async =>
       asMap((await client.get('/leaderboard')).data);
 
-  Future<Map<String, dynamic>> attendance({int perPage = 50}) async => asMap(
+  Future<Map<String, dynamic>> attendance({
+    int perPage = 50,
+    DateTime? from,
+    DateTime? to,
+  }) async => asMap(
     (await client.get(
       '/attendance',
-      queryParameters: {'per_page': perPage},
+      queryParameters: {
+        'per_page': perPage,
+        if (from != null) 'from': _dateOnly(from),
+        if (to != null) 'to': _dateOnly(to),
+      },
     )).data,
   );
+
+  Future<List<Map<String, dynamic>>> attendanceInternGroups({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final result = await client.get(
+      '/attendance',
+      queryParameters: {
+        'per_page': 1,
+        'from': _dateOnly(from),
+        'to': _dateOnly(to),
+      },
+    );
+    return asMapList(asMap(result.data)['intern_groups']);
+  }
 
   Future<Map<String, dynamic>> attendanceAction({
     required bool checkIn,
@@ -89,6 +112,25 @@ class AppRepository {
             .toList(),
       },
     );
+  }
+
+  Future<String> updateProfilePhoto(XFile photo) async {
+    final bytes = await photo.readAsBytes();
+    if (bytes.isEmpty) {
+      throw const ApiException(
+        'Foto profil tidak dapat dibaca. Pilih ulang foto.',
+      );
+    }
+    if (bytes.length > 2 * 1024 * 1024) {
+      throw const ApiException('Ukuran foto profil maksimal 2 MB.');
+    }
+    final result = await client.post(
+      '/profile/photo',
+      data: FormData.fromMap({
+        'photo': MultipartFile.fromBytes(bytes, filename: photo.name),
+      }),
+    );
+    return result.message;
   }
 
   Future<List<Map<String, dynamic>>> calendarEvents({

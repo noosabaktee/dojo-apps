@@ -4,17 +4,22 @@ import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/formatters.dart';
 import '../../repositories/app_repository.dart';
+import '../../services/local_notification_service.dart';
 import '../../widgets/common.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({
     required this.repository,
+    required this.notifications,
     required this.onOpenLink,
+    required this.onUnreadCountChanged,
     super.key,
   });
 
   final AppRepository repository;
+  final LocalNotificationService notifications;
   final ValueChanged<String> onOpenLink;
+  final ValueChanged<int> onUnreadCountChanged;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -38,6 +43,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _items = items;
           _error = null;
         });
+        widget.onUnreadCountChanged(
+          items.where((item) => item['is_read'] != true).length,
+        );
       }
     } on ApiException catch (exception) {
       if (mounted) setState(() => _error = exception.message);
@@ -50,6 +58,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await widget.repository.markNotificationRead(asInt(item['id']));
       if (!mounted) return;
       setState(() => item['is_read'] = true);
+      _reportUnreadCount();
+      await widget.notifications.dismissServerUpdate(
+        asInt(item['id']),
+        _unreadCount,
+      );
     } on ApiException catch (exception) {
       if (mounted) showMessage(context, exception.message);
     }
@@ -75,11 +88,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           item['is_read'] = true;
         }
       });
+      widget.onUnreadCountChanged(0);
+      await widget.notifications.clearServerUpdates();
+      if (!mounted) return;
       showMessage(context, 'Semua notifikasi sudah dibaca.');
     } on ApiException catch (exception) {
       if (mounted) showMessage(context, exception.message);
     }
   }
+
+  void _reportUnreadCount() {
+    widget.onUnreadCountChanged(_unreadCount);
+  }
+
+  int get _unreadCount => (_items ?? const <Map<String, dynamic>>[])
+      .where((item) => item['is_read'] != true)
+      .length;
 
   @override
   Widget build(BuildContext context) {

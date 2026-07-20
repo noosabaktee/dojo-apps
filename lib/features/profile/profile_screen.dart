@@ -1,5 +1,7 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../models/app_user.dart';
 import '../../services/local_notification_service.dart';
@@ -23,7 +25,21 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  late AppUser _user;
   bool _askingPermission = false;
+  bool _uploadingPhoto = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _user = widget.user;
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user != widget.user) _user = widget.user;
+  }
 
   Future<void> _enableNotifications() async {
     setState(() => _askingPermission = true);
@@ -65,12 +81,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _changePhoto() async {
+    try {
+      final photo = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Foto profil',
+            extensions: ['jpg', 'jpeg', 'png', 'webp'],
+            mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+          ),
+        ],
+      );
+      if (photo == null || !mounted) return;
+      setState(() => _uploadingPhoto = true);
+      final message = await widget.session.repository.updateProfilePhoto(photo);
+      final refreshed = await widget.session.refreshUser();
+      if (!mounted) return;
+      setState(() => _user = refreshed);
+      showMessage(context, message);
+    } on ApiException catch (exception) {
+      if (mounted) {
+        await showAppAlert(
+          context,
+          title: 'Foto belum diperbarui',
+          message: exception.message,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        await showAppAlert(
+          context,
+          title: 'Foto belum diperbarui',
+          message: 'Foto tidak dapat dipilih. Silakan coba kembali.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail =
-        widget.user.intern ??
-        widget.user.mentor ??
-        widget.user.adminProfile ??
+        _user.intern ??
+        _user.mentor ??
+        _user.adminProfile ??
         const <String, dynamic>{};
     return Scaffold(
       appBar: AppBar(title: const Text('Profil')),
@@ -80,7 +135,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
           children: [
             FeatureBanner(
-              badge: widget.user.roleLabel,
+              badge: _user.roleLabel,
               title: 'Profil dan perangkatmu',
               subtitle: 'Kelola informasi akun serta izin notifikasi aplikasi.',
               icon: Icons.person_rounded,
@@ -95,27 +150,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.all(22),
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 42,
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      child: Text(
-                        widget.user.initials,
-                        style: const TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
+                    _ProfileAvatar(
+                      user: _user,
+                      uploading: _uploadingPhoto,
+                      onTap: _uploadingPhoto ? null : _changePhoto,
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      widget.user.name,
+                      _user.name,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 4),
-                    Text(widget.user.email),
+                    Text(_user.email),
                     const SizedBox(height: 10),
-                    StatusPill(widget.user.roleLabel),
+                    StatusPill(_user.roleLabel),
+                    // const SizedBox(height: 9),
+                    // TextButton.icon(
+                    //   onPressed: _uploadingPhoto ? null : _changePhoto,
+                    //   icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                    //   label: const Text('Ubah foto profil'),
+                    // ),
                   ],
                 ),
               ),
@@ -195,6 +249,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({
+    required this.user,
+    required this.uploading,
+    required this.onTap,
+  });
+
+  final AppUser user;
+  final bool uploading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = ApiClient.publicFileUrl(user.profilePhoto);
+    return Semantics(
+      button: true,
+      label: 'Ubah foto profil',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox.square(
+          dimension: 98,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ClipOval(
+                  child: ColoredBox(
+                    color: AppColors.primary,
+                    child: photoUrl == null
+                        ? _AvatarInitials(user.initials)
+                        : Image.network(
+                            photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                _AvatarInitials(user.initials),
+                          ),
+                  ),
+                ),
+              ),
+              if (uploading)
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x88000000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Positioned(
+                  right: 0,
+                  bottom: 3,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                    ),
+                    child: const Icon(
+                      Icons.photo_camera_rounded,
+                      color: AppColors.primaryDark,
+                      size: 16,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarInitials extends StatelessWidget {
+  const _AvatarInitials(this.initials);
+
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Text(
+      initials,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 25,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _InfoTile extends StatelessWidget {

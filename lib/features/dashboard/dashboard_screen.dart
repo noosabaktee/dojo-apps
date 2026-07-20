@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
@@ -13,6 +14,7 @@ class DashboardScreen extends StatefulWidget {
     required this.repository,
     required this.onOpenFeature,
     required this.onOpenNotifications,
+    required this.unreadCount,
     super.key,
   });
 
@@ -20,6 +22,7 @@ class DashboardScreen extends StatefulWidget {
   final AppRepository repository;
   final ValueChanged<String> onOpenFeature;
   final VoidCallback onOpenNotifications;
+  final ValueListenable<int> unreadCount;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -103,7 +106,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       IconButton.filledTonal(
                         onPressed: widget.onOpenNotifications,
-                        icon: const Icon(Icons.notifications_none_rounded),
+                        icon: ValueListenableBuilder<int>(
+                          valueListenable: widget.unreadCount,
+                          builder: (_, count, _) =>
+                              _NotificationBellIcon(count: count),
+                        ),
                         tooltip: 'Notifikasi',
                       ),
                     ],
@@ -231,6 +238,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
+}
+
+class _NotificationBellIcon extends StatelessWidget {
+  const _NotificationBellIcon({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      const Icon(Icons.notifications_none_rounded),
+      if (count > 0)
+        Positioned(
+          top: -8,
+          right: -10,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.danger,
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: Colors.white, width: 1.5),
+            ),
+            child: Text(
+              count > 99 ? '99+' : '$count',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9,
+                height: 1,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 class _HeroCard extends StatelessWidget {
@@ -470,7 +515,8 @@ class _QuickActionCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(13),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 40,
@@ -481,9 +527,10 @@ class _QuickActionCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: color, size: 21),
               ),
-              const Spacer(),
+              const SizedBox(height: 10),
               Text(
                 label,
+                textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
