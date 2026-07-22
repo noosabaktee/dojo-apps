@@ -70,7 +70,7 @@ class ApiClient {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.8.176:8000/api/v1',
+    defaultValue: 'https://im.todays.id/api/v1',
   );
   static const _tokenKey = 'dojo_api_token';
 
