@@ -293,11 +293,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (key == 'profile') {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => ProfileScreen(
-            user: widget.user,
-            session: widget.session,
-            notifications: widget.notifications,
-          ),
+          builder: (_) =>
+              ProfileScreen(user: widget.user, session: widget.session),
         ),
       );
       return;

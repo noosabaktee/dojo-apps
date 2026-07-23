@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:vibration/vibration.dart';
 
 class LocalNotificationService {
+  static const _androidIcon = 'ic_stat_dojo';
   static const _updateGroupKey = 'dojo_updates_group';
   static const _updateSummaryId = 49999;
 
@@ -19,7 +20,7 @@ class LocalNotificationService {
     'attendance_reminders',
     'Pengingat Absensi',
     channelDescription: 'Pengingat clock in dan clock out intern',
-    icon: '@drawable/ic_stat_dojo',
+    icon: _androidIcon,
     importance: Importance.max,
     priority: Priority.high,
     enableVibration: true,
@@ -30,7 +31,7 @@ class LocalNotificationService {
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@drawable/ic_stat_dojo'),
+      android: AndroidInitializationSettings(_androidIcon),
       iOS: DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -147,7 +148,7 @@ class LocalNotificationService {
           'dojo_updates',
           'Update Dojo',
           channelDescription: 'Update kegiatan dan pengajuan internship',
-          icon: '@drawable/ic_stat_dojo',
+          icon: _androidIcon,
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
@@ -186,7 +187,7 @@ class LocalNotificationService {
             'dojo_updates',
             'Update Dojo',
             channelDescription: 'Update kegiatan dan pengajuan internship',
-            icon: '@drawable/ic_stat_dojo',
+            icon: _androidIcon,
             importance: Importance.high,
             priority: Priority.high,
             groupKey: _updateGroupKey,

@@ -4,21 +4,14 @@ import 'package:flutter/material.dart';
 import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../models/app_user.dart';
-import '../../services/local_notification_service.dart';
 import '../../state/app_session.dart';
 import '../../widgets/common.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({
-    required this.user,
-    required this.session,
-    required this.notifications,
-    super.key,
-  });
+  const ProfileScreen({required this.user, required this.session, super.key});
 
   final AppUser user;
   final AppSession session;
-  final LocalNotificationService notifications;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -26,7 +19,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late AppUser _user;
-  bool _askingPermission = false;
   bool _uploadingPhoto = false;
 
   @override
@@ -39,19 +31,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void didUpdateWidget(covariant ProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user != widget.user) _user = widget.user;
-  }
-
-  Future<void> _enableNotifications() async {
-    setState(() => _askingPermission = true);
-    final granted = await widget.notifications.requestPermission();
-    if (!mounted) return;
-    setState(() => _askingPermission = false);
-    showMessage(
-      context,
-      granted
-          ? 'Notifikasi perangkat sudah diaktifkan.'
-          : 'Izin notifikasi belum diberikan. Buka pengaturan perangkat bila sebelumnya ditolak.',
-    );
   }
 
   Future<void> _logout() async {
@@ -137,11 +116,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             FeatureBanner(
               badge: _user.roleLabel,
               title: 'Profil dan perangkatmu',
-              subtitle: 'Kelola informasi akun serta izin notifikasi aplikasi.',
+              subtitle: 'Kelola informasi akun dan foto profilmu.',
               icon: Icons.person_rounded,
               supportingIcons: const [
                 Icons.badge_outlined,
-                Icons.notifications_active_outlined,
+                Icons.photo_camera_outlined,
               ],
             ),
             const SizedBox(height: 16),
@@ -204,35 +183,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ],
                 ],
-              ),
-            ),
-            const SizedBox(height: 22),
-            const SectionHeading(title: 'Perangkat'),
-            const SizedBox(height: 10),
-            Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 7,
-                ),
-                leading: const Icon(
-                  Icons.notifications_active_outlined,
-                  color: AppColors.primary,
-                ),
-                title: const Text(
-                  'Aktifkan notifikasi',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                subtitle: const Text(
-                  'Termasuk pengingat Clock In dan Clock Out.',
-                ),
-                trailing: _askingPermission
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.chevron_right_rounded),
-                onTap: _askingPermission ? null : _enableNotifications,
               ),
             ),
             const SizedBox(height: 24),

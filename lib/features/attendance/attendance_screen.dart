@@ -75,9 +75,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       });
       if (widget.user.isIntern) {
         _scheduleClockOutAvailability(asMap(data['settings']));
-        await widget.notifications.scheduleAttendanceReminders(
-          asMap(data['settings']),
-        );
+        try {
+          await widget.notifications.scheduleAttendanceReminders(
+            asMap(data['settings']),
+          );
+        } catch (_) {
+          // Reminder perangkat tidak boleh mengubah absensi yang sudah berhasil.
+        }
       }
     } on ApiException catch (exception) {
       if (mounted) setState(() => _error = exception.message);
