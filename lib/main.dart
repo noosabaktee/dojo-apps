@@ -42,6 +42,11 @@ Future<void> main() async {
   };
 
   final notifications = LocalNotificationService();
+  try {
+    await notifications.initialize();
+  } catch (_) {
+    // The app remains usable if a target has no notification host.
+  }
   runApp(
     DojoApp(
       session: session,
@@ -49,11 +54,6 @@ Future<void> main() async {
       notifications: notifications,
       navigatorKey: navigatorKey,
     ),
-  );
-  unawaited(
-    notifications.initialize().catchError((_) {
-      // The app remains usable if a target has no notification host.
-    }),
   );
   await session.bootstrap(minimumDuration: const Duration(milliseconds: 1350));
 }

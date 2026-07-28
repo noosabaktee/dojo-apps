@@ -73,6 +73,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final events = asMapList(data['upcoming_calendar_sharings']);
     final leaders = asMapList(data['leaderboard']);
     final today = asMap(_attendance?['today']);
+    final isNonProjectIntern = widget.user.isPklOrRegularIntern;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -124,7 +125,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 26),
-                  const SectionHeading(title: 'Ringkasan hari ini'),
+                  SectionHeading(
+                    title: isNonProjectIntern
+                        ? 'Ringkasan perjalananmu'
+                        : 'Ringkasan hari ini',
+                  ),
                   const SizedBox(height: 12),
                   GridView.count(
                     shrinkWrap: true,
@@ -133,7 +138,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     childAspectRatio: 1.5,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    children: widget.user.isIntern
+                    children: isNonProjectIntern
+                        ? [
+                            MetricCard(
+                              label: 'Hari hadir',
+                              value: compactNumber(data['attendance_days']),
+                              icon: Icons.fact_check_outlined,
+                              color: AppColors.primary,
+                            ),
+                            MetricCard(
+                              label: 'Sisa internship',
+                              value: data['remaining_days'] == null
+                                  ? '-'
+                                  : '${compactNumber(data['remaining_days'])} hari',
+                              icon: Icons.hourglass_bottom_rounded,
+                              color: const Color(0xFF2563EB),
+                            ),
+                            MetricCard(
+                              label: 'Rapor selesai',
+                              value: compactNumber(data['completed_reports']),
+                              icon: Icons.school_outlined,
+                              color: const Color(0xFFF59E0B),
+                            ),
+                            MetricCard(
+                              label: 'Achievement',
+                              value: compactNumber(data['achievements']),
+                              icon: Icons.workspace_premium_outlined,
+                            ),
+                          ]
+                        : widget.user.isIntern
                         ? [
                             MetricCard(
                               label: 'Project aktif',
@@ -204,31 +237,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const _CompactEmpty(message: 'Belum ada agenda mendatang.')
                   else
                     ...events.take(3).map((event) => _EventTile(event: event)),
-                  const SizedBox(height: 24),
-                  SectionHeading(
-                    title: 'Peringkat teratas',
-                    action: TextButton(
-                      onPressed: () => widget.onOpenFeature('leaderboard'),
-                      child: const Text('Leaderboard'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (leaders.isEmpty)
-                    const _CompactEmpty(message: 'Leaderboard belum tersedia.')
-                  else
-                    Card(
-                      child: Column(
-                        children: leaders
-                            .take(3)
-                            .map(
-                              (row) => _LeaderRow(
-                                row: row,
-                                isLast: row == leaders.take(3).last,
-                              ),
-                            )
-                            .toList(),
+                  if (!isNonProjectIntern) ...[
+                    const SizedBox(height: 24),
+                    SectionHeading(
+                      title: 'Peringkat teratas',
+                      action: TextButton(
+                        onPressed: () => widget.onOpenFeature('leaderboard'),
+                        child: const Text('Leaderboard'),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    if (leaders.isEmpty)
+                      const _CompactEmpty(
+                        message: 'Leaderboard belum tersedia.',
+                      )
+                    else
+                      Card(
+                        child: Column(
+                          children: leaders
+                              .take(3)
+                              .map(
+                                (row) => _LeaderRow(
+                                  row: row,
+                                  isLast: row == leaders.take(3).last,
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                  ],
                   const SizedBox(height: 20),
                 ],
               ),
@@ -293,14 +330,26 @@ class _HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final checkedIn = today['clock_in'] != null;
     final checkedOut = today['clock_out'] != null;
-    final title = user.isIntern
+    final title = user.isPklOrRegularIntern
+        ? checkedOut
+              ? 'Hari kerja selesai dengan baik'
+              : checkedIn
+              ? 'Tetap semangat belajar dan berkontribusi'
+              : 'Siap menjalani internship hari ini?'
+        : user.isIntern
         ? checkedOut
               ? 'Absensi hari ini lengkap'
               : checkedIn
               ? 'Jangan lupa Clock Out'
               : 'Siap memulai hari?'
         : 'Pantau internship dengan mudah';
-    final description = user.isIntern
+    final description = user.isPklOrRegularIntern
+        ? checkedOut
+              ? '${formatTime(today['clock_in'])} – ${formatTime(today['clock_out'])} WIB · Kehadiran lengkap'
+              : checkedIn
+              ? 'Clock In ${formatTime(today['clock_in'])} WIB · Fokus pada pengalaman, kedisiplinan, dan perkembanganmu.'
+              : 'Mulai dengan Clock In, ikuti agenda, dan catat perjalanan internshipmu.'
+        : user.isIntern
         ? checkedOut
               ? '${formatTime(today['clock_in'])} – ${formatTime(today['clock_out'])} WIB'
               : checkedIn
@@ -351,7 +400,9 @@ class _HeroCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
-                        user.roleLabel,
+                        user.isIntern
+                            ? 'Intern ${user.internTypeLabel}'
+                            : user.roleLabel,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,20 +12,17 @@ import '../../core/app_theme.dart';
 import '../../core/formatters.dart';
 import '../../models/app_user.dart';
 import '../../repositories/app_repository.dart';
-import '../../services/local_notification_service.dart';
 import '../../widgets/common.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({
     required this.user,
     required this.repository,
-    required this.notifications,
     super.key,
   });
 
   final AppUser user;
   final AppRepository repository;
-  final LocalNotificationService notifications;
 
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
@@ -41,6 +39,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String? _filteredError;
   bool _loadingFiltered = false;
   Timer? _clockOutAvailabilityTimer;
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
@@ -51,6 +50,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   void dispose() {
     _clockOutAvailabilityTimer?.cancel();
+    unawaited(_audioPlayer.dispose());
     super.dispose();
   }
 
@@ -75,13 +75,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       });
       if (widget.user.isIntern) {
         _scheduleClockOutAvailability(asMap(data['settings']));
-        try {
-          await widget.notifications.scheduleAttendanceReminders(
-            asMap(data['settings']),
-          );
-        } catch (_) {
-          // Reminder perangkat tidak boleh mengubah absensi yang sudah berhasil.
-        }
       }
     } on ApiException catch (exception) {
       if (mounted) setState(() => _error = exception.message);
@@ -143,19 +136,27 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         isDismissible: false,
         builder: (_) => _AttendanceCameraSheet(
           checkIn: checkIn,
+          onFailure: () => _playAttendanceFeedback(success: false),
           onVerify: (imageBytes) async {
-            final position = await _position();
-            return widget.repository.attendanceAction(
-              checkIn: checkIn,
-              imageBytes: imageBytes,
-              latitude: position.latitude,
-              longitude: position.longitude,
-              accuracy: position.accuracy,
-            );
+            try {
+              final position = await _position();
+              return await widget.repository.attendanceAction(
+                checkIn: checkIn,
+                imageBytes: imageBytes,
+                latitude: position.latitude,
+                longitude: position.longitude,
+                accuracy: position.accuracy,
+              );
+            } catch (_) {
+              await _playAttendanceFeedback(success: false);
+              rethrow;
+            }
           },
         ),
       );
       if (result == null || !mounted) return;
+      await _playAttendanceFeedback(success: true);
+      if (!mounted) return;
       showMessage(
         context,
         checkIn ? 'Clock In berhasil dicatat.' : 'Clock Out berhasil dicatat.',
@@ -174,6 +175,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     } finally {
       if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  Future<void> _playAttendanceFeedback({required bool success}) async {
+    try {
+      await _audioPlayer.stop();
+      await _audioPlayer.play(
+        AssetSource(
+          success ? 'audio/sukses-absen.wav' : 'audio/gagal-absen.wav',
+        ),
+      );
+    } catch (_) {
+      // Audio feedback must never change the attendance result.
     }
   }
 
@@ -487,7 +501,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               message: 'Catatan absensi akan muncul di sini.',
             )
           else
-            ...records.map((record) => _AttendanceTile(record: record)),
+            ...records.take(5).map((record) => _AttendanceTile(record: record)),
         ],
       ),
     );
@@ -1021,10 +1035,15 @@ class _TimeBox extends StatelessWidget {
 }
 
 class _AttendanceCameraSheet extends StatefulWidget {
-  const _AttendanceCameraSheet({required this.checkIn, required this.onVerify});
+  const _AttendanceCameraSheet({
+    required this.checkIn,
+    required this.onVerify,
+    required this.onFailure,
+  });
 
   final bool checkIn;
   final Future<Map<String, dynamic>> Function(Uint8List imageBytes) onVerify;
+  final Future<void> Function() onFailure;
 
   @override
   State<_AttendanceCameraSheet> createState() => _AttendanceCameraSheetState();
@@ -1127,6 +1146,7 @@ class _AttendanceCameraSheetState extends State<_AttendanceCameraSheet> {
       if (!mounted) return;
       Navigator.of(context).pop(result);
     } on CameraException {
+      await widget.onFailure();
       if (mounted) {
         setState(() {
           _taking = false;

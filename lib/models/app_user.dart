@@ -34,6 +34,16 @@ class AppUser {
 
   bool get isIntern => role.toLowerCase() == 'intern';
   bool get isMentor => role.toLowerCase() == 'mentor';
+  String get internType =>
+      intern?['type']?.toString().trim().toLowerCase() ?? 'digitalisasi';
+  bool get isDigitalizationIntern => isIntern && internType == 'digitalisasi';
+  bool get isPklOrRegularIntern =>
+      isIntern && (internType == 'pkl' || internType == 'regular');
+  String get internTypeLabel => switch (internType) {
+    'pkl' => 'PKL',
+    'regular' => 'Reguler',
+    _ => 'Digitalisasi',
+  };
   bool get isAdmin {
     final value = role.toLowerCase();
     return value == 'hrd' || value == 'headmaster';

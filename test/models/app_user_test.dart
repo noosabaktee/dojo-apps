@@ -39,5 +39,28 @@ void main() {
       expect(hrd.roleLabel, 'Human Resources');
       expect(headmaster.roleLabel, 'Headmaster');
     });
+
+    test('distinguishes project and non-project intern types', () {
+      final pkl = AppUser.fromJson({
+        'id': 3,
+        'email': 'pkl@example.com',
+        'role': 'Intern',
+        'name': 'Intern PKL',
+        'intern': {'id': 8, 'type': 'pkl'},
+      });
+      final digitalization = AppUser.fromJson({
+        'id': 4,
+        'email': 'digital@example.com',
+        'role': 'Intern',
+        'name': 'Intern Digitalisasi',
+        'intern': {'id': 9, 'type': 'digitalisasi'},
+      });
+
+      expect(pkl.isPklOrRegularIntern, isTrue);
+      expect(pkl.isDigitalizationIntern, isFalse);
+      expect(pkl.internTypeLabel, 'PKL');
+      expect(digitalization.isDigitalizationIntern, isTrue);
+      expect(digitalization.internTypeLabel, 'Digitalisasi');
+    });
   });
 }

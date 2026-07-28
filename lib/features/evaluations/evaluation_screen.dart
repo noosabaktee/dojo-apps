@@ -231,7 +231,7 @@ class EvaluationDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Nilai akhir ${asDouble(item['exposure_score']).toStringAsFixed(1)} / 100',
+                    'Nilai akhir ${asDouble(item['exposure_score']).toStringAsFixed(1)} / 100 · Grade ${item['grade'] ?? '-'}',
                     style: const TextStyle(color: Color(0xFFDCEFE2)),
                   ),
                   const SizedBox(height: 18),
@@ -308,42 +308,22 @@ class EvaluationDetailScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-                    _ScoreRow(
-                      label: 'Hard Skill',
-                      value: asDouble(item['hard_skill']),
-                    ),
-                    _ScoreRow(
-                      label: 'Collaboration',
-                      value: asDouble(item['collaboration']),
-                    ),
-                    _ScoreRow(
-                      label: 'Ownership',
-                      value: asDouble(item['ownership']),
-                    ),
-                    _ScoreRow(
-                      label: 'Sharing',
-                      value: asDouble(item['sharing']),
-                      last: true,
-                    ),
+                    for (final (index, criterion) in asMapList(
+                      item['assessment_criteria'],
+                    ).indexed)
+                      _ScoreRow(
+                        label:
+                            criterion['label']?.toString() ??
+                            'Assessment Criteria',
+                        value: asDouble(criterion['score']),
+                        grade: criterion['grade']?.toString(),
+                        last:
+                            index ==
+                            asMapList(item['assessment_criteria']).length - 1,
+                      ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _NarrativeCard(
-              title: 'Kekuatan',
-              icon: Icons.auto_awesome_outlined,
-              text: item['strength']?.toString(),
-            ),
-            _NarrativeCard(
-              title: 'Area pengembangan',
-              icon: Icons.trending_up_rounded,
-              text: item['development']?.toString(),
-            ),
-            _NarrativeCard(
-              title: 'Rekomendasi',
-              icon: Icons.lightbulb_outline_rounded,
-              text: item['recommendation']?.toString(),
             ),
             const SizedBox(height: 8),
             Text(
@@ -362,10 +342,12 @@ class _ScoreRow extends StatelessWidget {
   const _ScoreRow({
     required this.label,
     required this.value,
+    this.grade,
     this.last = false,
   });
   final String label;
   final double value;
+  final String? grade;
   final bool last;
 
   @override
@@ -382,7 +364,7 @@ class _ScoreRow extends StatelessWidget {
               ),
             ),
             Text(
-              value.toStringAsFixed(0),
+              '${value.toStringAsFixed(0)} · ${grade ?? '-'}',
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ],
@@ -395,41 +377,6 @@ class _ScoreRow extends StatelessWidget {
           backgroundColor: AppColors.mint,
         ),
       ],
-    ),
-  );
-}
-
-class _NarrativeCard extends StatelessWidget {
-  const _NarrativeCard({required this.title, required this.icon, this.text});
-  final String title;
-  final IconData icon;
-  final String? text;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(bottom: 10),
-    child: Padding(
-      padding: const EdgeInsets.all(17),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 5),
-                Text(text?.isNotEmpty == true ? text! : 'Belum ada catatan.'),
-              ],
-            ),
-          ),
-        ],
-      ),
     ),
   );
 }

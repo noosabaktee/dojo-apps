@@ -48,32 +48,33 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   List<_Destination> get _destinations {
     if (widget.user.isIntern) {
-      return const [
-        _Destination(
+      return [
+        const _Destination(
           'dashboard',
           'Beranda',
           Icons.home_outlined,
           Icons.home_rounded,
         ),
-        _Destination(
-          'leaderboard',
-          'Peringkat',
-          Icons.emoji_events_outlined,
-          Icons.emoji_events,
-        ),
-        _Destination(
+        if (widget.user.isDigitalizationIntern)
+          const _Destination(
+            'leaderboard',
+            'Peringkat',
+            Icons.emoji_events_outlined,
+            Icons.emoji_events,
+          ),
+        const _Destination(
           'attendance',
           'Absensi',
           Icons.fingerprint_outlined,
           Icons.fingerprint_rounded,
         ),
-        _Destination(
+        const _Destination(
           'calendar',
           'Kalender',
           Icons.calendar_month_outlined,
           Icons.calendar_month_rounded,
         ),
-        _Destination(
+        const _Destination(
           'menu',
           'Menu',
           Icons.grid_view_outlined,
@@ -156,8 +157,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.notifications.setPayloadHandler(_openNotificationPayload);
-      widget.notifications.requestPermission();
-      _pollNotifications();
+      unawaited(_initializeNotifications());
     });
     _pollTimer = Timer.periodic(
       const Duration(seconds: 30),
@@ -165,11 +165,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _initializeNotifications() async {
+    try {
+      await widget.notifications.requestPermission();
+      if (widget.user.isIntern) {
+        await widget.notifications.scheduleAttendanceReminders();
+      } else {
+        await widget.notifications.cancelAttendanceReminders();
+      }
+    } catch (_) {
+      // Notification scheduling is best-effort; server updates still sync.
+    }
+    await _pollNotifications();
+  }
+
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.id != widget.user.id ||
-        oldWidget.user.role != widget.user.role) {
+        oldWidget.user.role != widget.user.role ||
+        oldWidget.user.internType != widget.user.internType) {
       _index = 0;
       _syncPages();
     } else if (oldWidget.user.name != widget.user.name ||
@@ -320,7 +335,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     'attendance' => AttendanceScreen(
       user: widget.user,
       repository: widget.repository,
-      notifications: widget.notifications,
     ),
     'calendar' => CalendarScreen(repository: widget.repository),
     'evaluation' => EvaluationScreen(

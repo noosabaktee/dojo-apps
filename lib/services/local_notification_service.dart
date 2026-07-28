@@ -8,6 +8,7 @@ import 'package:vibration/vibration.dart';
 
 class LocalNotificationService {
   static const _androidIcon = 'ic_stat_dojo';
+  static const _bellSound = RawResourceAndroidNotificationSound('bell_dojo');
   static const _updateGroupKey = 'dojo_updates_group';
   static const _updateSummaryId = 49999;
 
@@ -17,7 +18,7 @@ class LocalNotificationService {
   String? _pendingPayload;
 
   static const _attendanceChannel = AndroidNotificationDetails(
-    'attendance_reminders',
+    'attendance_reminders_bell_v2',
     'Pengingat Absensi',
     channelDescription: 'Pengingat clock in dan clock out intern',
     icon: _androidIcon,
@@ -25,6 +26,7 @@ class LocalNotificationService {
     priority: Priority.high,
     enableVibration: true,
     playSound: true,
+    sound: _bellSound,
   );
 
   Future<void> initialize() async {
@@ -93,41 +95,37 @@ class LocalNotificationService {
     return false;
   }
 
-  Future<void> scheduleAttendanceReminders(
-    Map<String, dynamic> settings,
-  ) async {
+  Future<void> scheduleAttendanceReminders() async {
     if (kIsWeb) return;
     await requestPermission();
-    for (var id = 1101; id <= 1110; id++) {
-      await _plugin.cancel(id: id);
-    }
-
-    final clockIn = _parseTime(settings['clock_in_start']?.toString(), 8, 0);
-    final clockOut = _parseTime(settings['clock_out_start']?.toString(), 17, 0);
-    final checkInTime = _minusMinutes(clockIn.$1, clockIn.$2, 15);
-    final checkOutTime = _minusMinutes(clockOut.$1, clockOut.$2, 10);
+    await cancelAttendanceReminders();
 
     for (var weekday = DateTime.monday; weekday <= DateTime.friday; weekday++) {
       await _scheduleWeekly(
         id: 1100 + weekday,
         weekday: weekday,
-        hour: checkInTime.$1,
-        minute: checkInTime.$2,
-        title: 'Jangan lupa Clock In',
-        body:
-            'Siapkan Face ID dan lokasi. Clock In dibuka pukul '
-            '${_hhmm(clockIn.$1, clockIn.$2)} WIB.',
+        hour: 8,
+        minute: 0,
+        title: 'Waktunya memulai bekerja',
+        body: 'Selamat pagi! Jangan lupa Clock In dan mulai harimu di Dojo.',
         payload: 'attendance',
       );
       await _scheduleWeekly(
         id: 1105 + weekday,
         weekday: weekday,
-        hour: checkOutTime.$1,
-        minute: checkOutTime.$2,
-        title: 'Waktunya bersiap Clock Out',
-        body: 'Pastikan Clock Out tercatat sebelum meninggalkan lokasi kerja.',
+        hour: 16,
+        minute: 30,
+        title: 'Waktunya selesai bekerja',
+        body: 'Terima kasih untuk hari ini. Jangan lupa Clock Out di Dojo.',
         payload: 'attendance',
       );
+    }
+  }
+
+  Future<void> cancelAttendanceReminders() async {
+    if (kIsWeb) return;
+    for (var id = 1101; id <= 1110; id++) {
+      await _plugin.cancel(id: id);
     }
   }
 
@@ -145,13 +143,15 @@ class LocalNotificationService {
       body: body,
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          'dojo_updates',
+          'dojo_updates_bell_v2',
           'Update Dojo',
           channelDescription: 'Update kegiatan dan pengajuan internship',
           icon: _androidIcon,
           importance: Importance.high,
           priority: Priority.high,
           enableVibration: true,
+          playSound: true,
+          sound: _bellSound,
           groupKey: _updateGroupKey,
           number: 1,
         ),
@@ -160,6 +160,7 @@ class LocalNotificationService {
           presentSound: true,
           presentBanner: true,
           badgeNumber: unreadCount,
+          sound: 'bell-dojo.wav',
         ),
       ),
       payload: payload,
@@ -253,6 +254,7 @@ class LocalNotificationService {
           presentAlert: true,
           presentSound: true,
           presentBanner: true,
+          sound: 'bell-dojo.wav',
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -276,23 +278,4 @@ class LocalNotificationService {
     }
     return scheduled;
   }
-
-  (int, int) _parseTime(String? value, int fallbackHour, int fallbackMinute) {
-    final parts = value?.split(':');
-    if (parts == null || parts.length < 2) {
-      return (fallbackHour, fallbackMinute);
-    }
-    return (
-      int.tryParse(parts[0]) ?? fallbackHour,
-      int.tryParse(parts[1]) ?? fallbackMinute,
-    );
-  }
-
-  (int, int) _minusMinutes(int hour, int minute, int delta) {
-    final total = (hour * 60 + minute - delta) % (24 * 60);
-    return (total ~/ 60, total % 60);
-  }
-
-  String _hhmm(int hour, int minute) =>
-      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 }
