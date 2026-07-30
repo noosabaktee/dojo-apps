@@ -107,7 +107,7 @@ class LocalNotificationService {
         hour: 8,
         minute: 0,
         title: 'Waktunya memulai bekerja',
-        body: 'Selamat pagi! Jangan lupa Clock In dan mulai harimu di Dojo.',
+        body: 'Selamat pagi! Jangan lupa Clock In di Dojo dan mulai harimu.',
         payload: 'attendance',
       );
       await _scheduleWeekly(

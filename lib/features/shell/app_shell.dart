@@ -137,9 +137,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
       _Destination(
         'wfh',
-        'WFH',
-        Icons.home_work_outlined,
-        Icons.home_work_rounded,
+        'Pengajuan',
+        Icons.event_note_outlined,
+        Icons.event_note_rounded,
       ),
       _Destination(
         'menu',

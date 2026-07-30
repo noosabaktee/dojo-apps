@@ -22,7 +22,7 @@ class MenuScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final features = <_MenuItem>[
       if (user.isIntern) ...const [
-        _MenuItem('wfh', 'Pengajuan WFH', Icons.home_work_outlined),
+        _MenuItem('wfh', 'WFH, Sakit & Izin', Icons.event_note_outlined),
         _MenuItem('evaluation', 'Rapor Intern', Icons.school_outlined),
       ],
       if (user.isAdmin) ...const [

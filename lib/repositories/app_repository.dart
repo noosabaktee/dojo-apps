@@ -170,6 +170,7 @@ class AppRepository {
   }
 
   Future<String> submitWfh({
+    required String type,
     required DateTime startDate,
     required DateTime endDate,
     required String reason,
@@ -184,6 +185,7 @@ class AppRepository {
     final result = await client.post(
       '/work-from-home',
       data: FormData.fromMap({
+        'type': type,
         'start_date': _dateOnly(startDate),
         'end_date': _dateOnly(endDate),
         'reason': reason.trim(),

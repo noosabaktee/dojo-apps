@@ -466,12 +466,7 @@ class _QuickActions extends StatelessWidget {
               Icons.fingerprint_rounded,
               AppColors.primary,
             ),
-            (
-              'wfh',
-              'Pengajuan WFH',
-              Icons.home_work_outlined,
-              Color(0xFF2563EB),
-            ),
+            ('wfh', 'Pengajuan', Icons.event_note_outlined, Color(0xFF2563EB)),
             ('evaluation', 'Rapor', Icons.school_outlined, Color(0xFFF59E0B)),
           ]
         : user.isMentor
@@ -497,7 +492,12 @@ class _QuickActions extends StatelessWidget {
               Icons.fact_check_outlined,
               AppColors.primary,
             ),
-            ('wfh', 'Review WFH', Icons.home_work_outlined, Color(0xFF2563EB)),
+            (
+              'wfh',
+              'Review Pengajuan',
+              Icons.event_note_outlined,
+              Color(0xFF2563EB),
+            ),
             ('evaluation', 'Rapor', Icons.school_outlined, Color(0xFFF59E0B)),
           ];
     return SizedBox(

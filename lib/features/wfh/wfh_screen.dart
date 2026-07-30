@@ -9,6 +9,47 @@ import '../../repositories/app_repository.dart';
 import '../../widgets/common.dart';
 import '../documents/document_viewer_screen.dart';
 
+const _requestTypeOptions = <_RequestTypeOption>[
+  _RequestTypeOption(
+    value: 'WFH',
+    label: 'WFH',
+    help: 'Tetap wajib clock in dan clock out menggunakan Face ID dan lokasi.',
+    icon: Icons.home_work_outlined,
+  ),
+  _RequestTypeOption(
+    value: 'Sakit',
+    label: 'Sakit',
+    help: 'Jika disetujui, kamu tidak perlu melakukan absensi.',
+    icon: Icons.medical_services_outlined,
+  ),
+  _RequestTypeOption(
+    value: 'Izin',
+    label: 'Izin',
+    help: 'Jika disetujui, kamu tidak perlu melakukan absensi.',
+    icon: Icons.event_busy_outlined,
+  ),
+];
+
+_RequestTypeOption _requestTypeOption(String? value) =>
+    _requestTypeOptions.firstWhere(
+      (option) => option.value == value,
+      orElse: () => _requestTypeOptions.first,
+    );
+
+class _RequestTypeOption {
+  const _RequestTypeOption({
+    required this.value,
+    required this.label,
+    required this.help,
+    required this.icon,
+  });
+
+  final String value;
+  final String label;
+  final String help;
+  final IconData icon;
+}
+
 class WfhScreen extends StatefulWidget {
   const WfhScreen({required this.user, required this.repository, super.key});
 
@@ -69,6 +110,7 @@ class _WfhScreenState extends State<WfhScreen> {
   }
 
   Future<void> _review(Map<String, dynamic> item, bool approve) async {
+    final type = _requestTypeOption(item['type']?.toString()).label;
     if (item['status']?.toString() != 'Pending') {
       await showAppAlert(
         context,
@@ -86,7 +128,9 @@ class _WfhScreenState extends State<WfhScreen> {
     final note = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(approve ? 'Setujui pengajuan WFH' : 'Tolak pengajuan WFH'),
+        title: Text(
+          approve ? 'Setujui pengajuan $type' : 'Tolak pengajuan $type',
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +151,7 @@ class _WfhScreenState extends State<WfhScreen> {
                     : 'Catatan penolakan',
                 hintText: approve
                     ? 'Tambahkan arahan atau catatan untuk intern.'
-                    : 'Jelaskan alasan penolakan atau pembatalan WFH.',
+                    : 'Jelaskan alasan penolakan pengajuan $type.',
               ),
             ),
           ],
@@ -166,12 +210,13 @@ class _WfhScreenState extends State<WfhScreen> {
   }
 
   Future<void> _cancel(Map<String, dynamic> item) async {
+    final type = _requestTypeOption(item['type']?.toString()).label;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Batalkan pengajuan?'),
-        content: const Text(
-          'Pengajuan yang dibatalkan tidak dapat digunakan untuk absensi WFH.',
+        title: Text('Batalkan pengajuan $type?'),
+        content: Text(
+          'Pengajuan $type yang dibatalkan tidak akan berlaku pada rentang tanggal tersebut.',
         ),
         actions: [
           TextButton(
@@ -207,10 +252,11 @@ class _WfhScreenState extends State<WfhScreen> {
   }
 
   void _openAttachment(Map<String, dynamic> item) {
+    final type = _requestTypeOption(item['type']?.toString()).label;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => DocumentViewerScreen(
-          title: 'Lampiran WFH',
+          title: 'Lampiran $type',
           loader: () => widget.repository.wfhAttachment(item),
         ),
       ),
@@ -235,10 +281,10 @@ class _WfhScreenState extends State<WfhScreen> {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
           ScreenTitle(
-            title: 'Pengajuan WFH',
+            title: 'WFH, Sakit & Izin',
             subtitle: _isAdmin
                 ? '$pending pengajuan menunggu keputusan.'
-                : 'Ajukan WFH sebelum absensi dari luar kantor.',
+                : 'Kelola seluruh pengajuan kehadiranmu di satu tempat.',
             action: _isAdmin
                 ? null
                 : IconButton.filled(
@@ -252,11 +298,11 @@ class _WfhScreenState extends State<WfhScreen> {
             badge: _isAdmin ? 'Review HRD / Headmaster' : 'Pengajuan intern',
             title: _isAdmin
                 ? '$pending pengajuan menunggu review'
-                : 'Tetap produktif dari lokasi terbaikmu',
+                : 'Ajukan sesuai kebutuhanmu',
             subtitle: _isAdmin
                 ? 'Periksa lampiran, rentang tanggal, lalu berikan catatan yang jelas.'
-                : 'Ajukan WFH dengan alasan, tanggal, dan dokumen pendukung.',
-            icon: Icons.home_work_rounded,
+                : 'Pilih WFH, sakit, atau izin lalu lengkapi dokumen pendukung.',
+            icon: Icons.event_note_rounded,
             supportingIcons: _isAdmin
                 ? const [Icons.rate_review_outlined, Icons.task_alt_rounded]
                 : const [
@@ -320,7 +366,7 @@ class _WfhScreenState extends State<WfhScreen> {
             const EmptyState(
               title: 'Tidak ada pengajuan',
               message: 'Pengajuan dengan status ini belum tersedia.',
-              icon: Icons.home_work_outlined,
+              icon: Icons.event_note_outlined,
             )
           else
             ..._filtered.map(
@@ -372,6 +418,7 @@ class _WfhCard extends StatelessWidget {
     final intern = asMap(item['intern']);
     final status = item['status']?.toString() ?? 'Pending';
     final internName = intern['name']?.toString() ?? 'Intern';
+    final type = _requestTypeOption(item['type']?.toString());
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -384,12 +431,7 @@ class _WfhCard extends StatelessWidget {
                 CircleAvatar(
                   backgroundColor: AppColors.mint,
                   foregroundColor: AppColors.primary,
-                  child: Text(
-                    (isAdmin ? internName : 'WFH')
-                        .substring(0, 1)
-                        .toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
+                  child: Icon(type.icon),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -397,10 +439,11 @@ class _WfhCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isAdmin ? internName : 'Work From Home',
+                        isAdmin ? internName : type.label,
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                       Text(
+                        '${isAdmin ? '${type.label} • ' : ''}'
                         '${formatDate(item['start_date'])} – ${formatDate(item['end_date'])}',
                       ),
                     ],
@@ -552,10 +595,13 @@ class _WfhRequestSheet extends StatefulWidget {
 
 class _WfhRequestSheetState extends State<_WfhRequestSheet> {
   final _reasonController = TextEditingController();
+  String _type = 'WFH';
   DateTime? _startDate;
   DateTime? _endDate;
   XFile? _attachment;
   bool _submitting = false;
+
+  _RequestTypeOption get _selectedType => _requestTypeOption(_type);
 
   @override
   void dispose() {
@@ -629,12 +675,12 @@ class _WfhRequestSheetState extends State<_WfhRequestSheet> {
     FocusManager.instance.primaryFocus?.unfocus();
     final errors = <String>[];
     if (_startDate == null || _endDate == null) {
-      errors.add('Pilih tanggal mulai dan selesai WFH.');
+      errors.add('Pilih tanggal mulai dan selesai pengajuan.');
     } else if (_endDate!.isBefore(_startDate!)) {
       errors.add('Tanggal selesai tidak boleh sebelum tanggal mulai.');
     }
     if (_reasonController.text.trim().isEmpty) {
-      errors.add('Alasan dan rencana kerja wajib diisi.');
+      errors.add('Alasan pengajuan wajib diisi.');
     }
     if (_attachment == null) {
       errors.add('Lampiran pendukung wajib dipilih.');
@@ -648,6 +694,7 @@ class _WfhRequestSheetState extends State<_WfhRequestSheet> {
     var submitted = false;
     try {
       final message = await widget.repository.submitWfh(
+        type: _type,
         startDate: _startDate!,
         endDate: _endDate!,
         reason: _reasonController.text,
@@ -692,19 +739,75 @@ class _WfhRequestSheetState extends State<_WfhRequestSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Buat pengajuan WFH',
+              'Buat pengajuan',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 5),
-            const Text(
-              'WFH bukan pengajuan cuti. Absensi tetap menggunakan Face ID dan lokasi.',
-            ),
+            const Text('Pilih tipe pengajuan yang sesuai dengan kebutuhanmu.'),
             const SizedBox(height: 20),
+            Text(
+              'Tipe pengajuan',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 9),
+            SegmentedButton<String>(
+              segments: _requestTypeOptions
+                  .map(
+                    (option) => ButtonSegment<String>(
+                      value: option.value,
+                      label: Text(option.label),
+                      icon: Icon(option.icon),
+                    ),
+                  )
+                  .toList(),
+              selected: {_type},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                if (selection.isNotEmpty) {
+                  setState(() => _type = selection.first);
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: Container(
+                key: ValueKey(_type),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.mint,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      _selectedType.icon,
+                      size: 19,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        _selectedType.help,
+                        style: const TextStyle(
+                          color: AppColors.primaryDark,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
                   child: _DateField(
-                    label: 'Mulai WFH',
+                    label: 'Tanggal mulai',
                     value: _startDate,
                     onTap: () => _pickDate(true),
                   ),
@@ -712,7 +815,7 @@ class _WfhRequestSheetState extends State<_WfhRequestSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _DateField(
-                    label: 'Selesai WFH',
+                    label: 'Tanggal selesai',
                     value: _endDate,
                     onTap: () => _pickDate(false),
                   ),
@@ -725,8 +828,12 @@ class _WfhRequestSheetState extends State<_WfhRequestSheet> {
               minLines: 4,
               maxLines: 6,
               maxLength: 1500,
-              decoration: const InputDecoration(
-                labelText: 'Alasan dan rencana kerja',
+              decoration: InputDecoration(
+                labelText: switch (_type) {
+                  'Sakit' => 'Keterangan sakit',
+                  'Izin' => 'Alasan izin',
+                  _ => 'Alasan dan rencana kerja',
+                },
                 alignLabelWithHint: true,
               ),
             ),
